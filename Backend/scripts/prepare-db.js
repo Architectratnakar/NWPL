@@ -1,33 +1,24 @@
+/**
+ * Runs before the server starts on a hosting platform (Render, Railway, a VPS…).
+ *  - prisma/migrations exists → `prisma migrate deploy` (recommended once you commit migrations)
+ *  - no migrations yet        → `prisma db push` (creates / updates the tables from schema.prisma)
+ *  - SEED_DEMO_DATA=true      → loads demo data once (the seed skips itself when data already exists)
+ * Plain JavaScript on purpose, so it runs without TypeScript tooling.
+ */
+const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const { spawnSync } = require('child_process');
 
-const backendDir = path.resolve(__dirname, '..');
-const distServer = path.join(backendDir, 'dist', 'server.js');
+const root = path.join(__dirname, '..');
+const run = (cmd) => {
+  console.log(`\n> ${cmd}`);
+  execSync(cmd, { stdio: 'inherit', cwd: root });
+};
 
-if (!fs.existsSync(distServer)) {
-  console.error('❌ Production server bundle not found: dist/server.js');
-  console.error('   Run this first in Backend: npm run build');
-  process.exit(1);
-}
+const migrationsDir = path.join(root, 'prisma', 'migrations');
+const hasMigrations =
+  fs.existsSync(migrationsDir) && fs.readdirSync(migrationsDir).some((f) => fs.statSync(path.join(migrationsDir, f)).isDirectory());
 
-const envFile = path.join(backendDir, '.env');
-if (!fs.existsSync(envFile)) {
-  console.error('❌ Missing Backend/.env');
-  console.error('   Copy Backend/.env.example to Backend/.env and set DATABASE_URL.');
-  process.exit(1);
-}
+run(hasMigrations ? 'npx prisma migrate deploy' : 'npx prisma db push --skip-generate');
 
-console.log('🔧 Preparing database for production start...');
-const result = spawnSync(process.platform === 'win32' ? 'npx.cmd' : 'npx', ['prisma', 'migrate', 'deploy'], {
-  cwd: backendDir,
-  stdio: 'inherit',
-  env: process.env,
-});
-
-if (result.status !== 0) {
-  console.error('\n❌ Prisma migration failed. Fix the database setup and try again.');
-  process.exit(result.status ?? 1);
-}
-
-console.log('\n✅ Database is ready. Starting API...');
+if (process.env.SEED_DEMO_DATA === 'true') run('npx tsx prisma/seed.ts');

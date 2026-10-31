@@ -109,6 +109,26 @@ Distributors can log in with their **Distributor ID, mobile number or email**.
 5. Log in as **NW100001**: the wallet is credited, the *Star* rank is awarded and **Income** shows the full calculation for each line.
 6. As NW100001, request a **withdrawal**. As finance: **Approve → Bank file → Mark paid** with a UTR.
 
+## Deploy on Render
+
+**Option A: Blueprint (easiest).** Push the repo to GitHub. In Render, choose **New → Blueprint**, pick the repo, and Render reads `render.yaml`. It creates a PostgreSQL database and one web service that serves the API and the React app on the same URL, so login cookies work without extra settings.
+
+**Option B: your existing Render web service.** In *Settings*, set:
+
+| Setting | Value |
+|---|---|
+| Root Directory | *(empty — the repo root)* |
+| Build Command | `cd Frontend && npm install --include=dev && npm run build && cd ../Backend && npm install --include=dev && npm run build` |
+| Start Command | `cd Backend && npm run start:prod` |
+| Health Check Path | `/api/v1/health` |
+
+Environment variables: `NODE_VERSION=22`, `NODE_ENV=production`, `DATABASE_URL` (use the **Internal Database URL** of your Render PostgreSQL), `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `ENCRYPTION_SECRET` (long random strings), `WEB_ORIGIN=https://<your-service>.onrender.com`, and `SEED_DEMO_DATA=true` to load the demo logins on first start (set it to `false` afterwards).
+
+Notes:
+- `--include=dev` is required. Render sets `NODE_ENV=production`, which would otherwise skip TypeScript and the Prisma CLI that the build needs.
+- `npm run start:prod` creates or updates the tables before the server starts. It uses `prisma migrate deploy` when `Backend/prisma/migrations` is committed, and `prisma db push` otherwise.
+- Render's disk is temporary: uploaded KYC files are lost on every deploy. Attach a Render Disk mounted at `Backend/uploads`, or move uploads to S3, before real use.
+
 ## 6. Screens included
 
 **Public:** Login (logo + plan slides carousel, demo logins, Hindi/English) · Register (sponsor lookup, left/right placement) · Forgot password
