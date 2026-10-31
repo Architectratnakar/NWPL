@@ -2,7 +2,7 @@
   "name": "mlm-backend",
   "version": "1.0.0",
   "private": true,
-  "description": "MLM Portal Backend \u2014 Node.js REST API (Express + Prisma + PostgreSQL + Swagger)",
+  "description": "MLM Portal Backend — Node.js REST API (Express + Prisma + PostgreSQL + Swagger)",
   "main": "dist/server.js",
   "scripts": {
     "postinstall": "prisma generate",
@@ -18,7 +18,8 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:reset": "prisma migrate reset --force --skip-seed && npm run db:seed",
     "db:check": "tsx scripts/db-check.ts",
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts",
+    "start:prod": "node scripts/prepare-db.js && node dist/server.js"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
