@@ -8,7 +8,10 @@
     "dev:backend": "npm --prefix Backend run dev",
     "dev:frontend": "npm --prefix Frontend run dev",
     "test": "npm --prefix Backend test",
-    "build": "npm --prefix Backend run build && npm --prefix Frontend run build",
-    "start": "npm --prefix Backend start"
+    "build": "npm --prefix Frontend install --include=dev && npm --prefix Frontend run build && npm --prefix Backend install --include=dev && npm --prefix Backend run build",
+    "start": "npm --prefix Backend run start:prod"
+  },
+  "engines": {
+    "node": ">=20 <25"
   }
 }
