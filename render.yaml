@@ -1,0 +1,41 @@
+# Render Blueprint — one web service (API + built React app) and one PostgreSQL database.
+# Render dashboard → New → Blueprint → pick this repository.
+databases:
+  - name: mlm-db
+    databaseName: mlm
+    user: mlm
+    plan: free            # change to a paid plan for real use (free databases expire)
+
+services:
+  - type: web
+    name: mlm-portal
+    runtime: node
+    plan: free            # change to starter or higher for real use
+    buildCommand: >-
+      cd Frontend && npm install --include=dev && npm run build &&
+      cd ../Backend && npm install --include=dev && npm run build
+    startCommand: cd Backend && npm run start:prod
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: mlm-db
+          property: connectionString
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: ENCRYPTION_SECRET
+        generateValue: true
+      - key: WEB_ORIGIN
+        value: https://mlm-portal.onrender.com   # change to your service URL / custom domain
+      - key: COOKIE_SAMESITE
+        value: lax
+      - key: DEMO_PAYMENTS
+        value: "true"
+      - key: SEED_DEMO_DATA
+        value: "true"     # loads demo logins on first start; set to "false" for a real launch
