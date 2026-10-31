@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", "Noto Sans Devanagari", ui-sans-serif, system-ui, sans-serif;
+  --color-brand-50: #effaf2;
+  --color-brand-100: #d7f2df;
+  --color-brand-200: #b1e4c2;
+  --color-brand-300: #7fcf9c;
+  --color-brand-400: #4cb374;
+  --color-brand-500: #2a9657;
+  --color-brand-600: #1c7a45;
+  --color-brand-700: #186139;
+  --color-brand-800: #164d30;
+  --color-brand-900: #123f28;
+  --color-brand-950: #092416;
+  --color-gold-50: #fdf8eb;
+  --color-gold-100: #f9ecc7;
+  --color-gold-300: #ebc565;
+  --color-gold-400: #e0ab3a;
+  --color-gold-500: #c98f1f;
+  --color-gold-600: #a86f17;
+  --color-gold-700: #865316;
+  --color-plum-500: #7c3aed;
+  --color-plum-600: #6d28d9;
+  --color-canvas: #f5f6f2;
+}
+
+@layer base {
+  html { -webkit-font-smoothing: antialiased; }
+  body { @apply bg-canvas text-slate-800; }
+  :lang(hi) body, .hi { font-family: "Noto Sans Devanagari", "Plus Jakarta Sans", sans-serif; }
+  input, select, textarea, button { font: inherit; }
+  ::selection { background: var(--color-brand-200); }
+}
+
+@layer components {
+  .card { @apply rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]; }
+  .input {
+    @apply w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400
+      outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-100 disabled:bg-slate-50 disabled:text-slate-500;
+  }
+  .label { @apply mb-1.5 block text-[13px] font-semibold text-slate-700; }
+  .th { @apply whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500; }
+  .td { @apply whitespace-nowrap px-4 py-3 text-sm text-slate-700; }
+  .link { @apply font-semibold text-brand-700 hover:text-brand-800 hover:underline; }
+}
+
+.tree-line::before { content: ""; position: absolute; top: 0; left: 50%; height: 16px; border-left: 2px solid var(--color-brand-200); }
+.scrollbar-thin::-webkit-scrollbar { height: 6px; width: 6px; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 6px; }
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.animate-fade-in { animation: fade-in .25s ease-out; }

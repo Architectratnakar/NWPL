@@ -1,0 +1,14 @@
+{
+  "name": "mlm-portal",
+  "private": true,
+  "description": "Navarth Wellness distributor portal \u2014 Backend (Node.js REST API: Express + Prisma + PostgreSQL + Swagger) and Frontend (React)",
+  "scripts": {
+    "install:all": "npm --prefix Backend install && npm --prefix Frontend install",
+    "db:setup": "npm --prefix Backend run prisma:generate && npm --prefix Backend run db:migrate && npm --prefix Backend run db:extras && npm --prefix Backend run db:seed",
+    "dev:backend": "npm --prefix Backend run dev",
+    "dev:frontend": "npm --prefix Frontend run dev",
+    "test": "npm --prefix Backend test",
+    "build": "npm --prefix Backend run build && npm --prefix Frontend run build",
+    "start": "npm --prefix Backend start"
+  }
+}
