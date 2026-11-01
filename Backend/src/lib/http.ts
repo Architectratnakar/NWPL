@@ -46,7 +46,12 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
   if (/violates check constraint|cannot be changed|append-only/.test(message)) {
     return res.status(400).json({ error: { code: 'DB_RULE', message } });
   }
-  console.error(err);
+  console.error('\n❌ Unexpected server error:', err);
+  // In development show the real reason (never in production — it could reveal internals)
+  if (process.env.NODE_ENV !== 'production') {
+    const stack = err instanceof Error ? (err.stack ?? '').split('\n').slice(0, 4).map((l) => l.trim()) : [];
+    return res.status(500).json({ error: { code: 'INTERNAL', message: `Server error: ${message}`, details: { stack } } });
+  }
   return res.status(500).json({ error: { code: 'INTERNAL', message: 'Something went wrong. Please try again.' } });
 }
 
