@@ -4,7 +4,7 @@ import clsx from 'clsx';
 import {
   Award, BadgeCheck, BarChart3, Boxes, ClipboardList, FileClock, FileText, GitFork, HandCoins, Headphones, IdCard, LayoutDashboard,
   LogOut, Menu, Package, PackageCheck, Presentation, RotateCcw, Settings2, ShieldCheck, ShoppingBag, ShoppingCart, Sparkles, UserCog,
-  Users, Wallet, X, Zap, Network, Languages,
+  Users, Wallet, X, Zap, Network, Languages, IndianRupee,
 } from 'lucide-react';
 import { useAuth, type SessionUser } from '@/auth/AuthContext';
 import { useT, type TKey } from '@/i18n';
@@ -39,6 +39,7 @@ const adminNav: NavGroup[] = [
   ] },
   { label: 'finance', items: [
     { to: '/admin/closings', label: 'closings', icon: <ClipboardList className={I} />, roles: ['ADMIN_SUPER', 'ADMIN_FINANCE', 'ADMIN_OPS', 'COMPLIANCE'] },
+    { to: '/admin/income', label: 'distIncome', icon: <IndianRupee className={I} />, roles: ['ADMIN_SUPER'] },
     { to: '/admin/withdrawals', label: 'withdrawals', icon: <HandCoins className={I} />, roles: FIN },
     { to: '/admin/ranks', label: 'rewards', icon: <Award className={I} /> },
     { to: '/admin/reports', label: 'reports', icon: <FileText className={I} />, roles: ['ADMIN_SUPER', 'ADMIN_FINANCE', 'ADMIN_OPS', 'COMPLIANCE'] },

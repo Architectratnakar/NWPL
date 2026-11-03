@@ -113,6 +113,7 @@ export default function AdminDashboard() {
               [<ClipboardList key="1" className="h-4 w-4" />, 'Run today’s closing', '/admin/closings'],
               [<BadgeCheck key="2" className="h-4 w-4" />, 'Review KYC documents', '/admin/kyc'],
               [<HandCoins key="3" className="h-4 w-4" />, 'Process withdrawals', '/admin/withdrawals'],
+              ...(user?.role === 'ADMIN_SUPER' ? [[<IndianRupee key="i" className="h-4 w-4" />, 'Distributor income', '/admin/income']] : []),
               [<UserPlus key="4" className="h-4 w-4" />, 'Add a staff user', '/admin/users'],
               [<ShoppingCart key="5" className="h-4 w-4" />, 'Dispatch orders', '/admin/orders'],
             ].map(([ic, l, to]) => (

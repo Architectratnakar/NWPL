@@ -90,7 +90,7 @@ The login page has these as one-click buttons.
 | Who | User ID | Password | What to try |
 |---|---|---|---|
 | **Distributor** (Ramesh Kumar) | `NW100001` | `Demo@123` | Dashboard, genealogy tree, income, wallet & withdraw, shop, KYC |
-| **New member** (not activated) | `NW100040` | `Demo@123` | Activate with a 40 BV / 100 BV package (demo payment) |
+| **New member** (not activated) | `9123456789` (mobile) | `Demo@123` | Activate with a 40 BV / 100 BV package (demo payment) |
 | **Super Admin** | `admin@navarth.demo` | `Admin@123` | Everything, incl. staff users & plan settings |
 | **Finance** | `finance@navarth.demo` | `Finance@123` | Approve & post closings, process withdrawals |
 | **Operations** | `ops@navarth.demo` | `Ops@123` | Distributors, KYC, orders, returns |
@@ -102,7 +102,7 @@ Distributors can log in with their **Distributor ID, mobile number or email**.
 
 ### A 5-minute demo script
 
-1. Log in as **NW100040**, go to **Activate / Upgrade**, buy the 100 BV package and click **Pay (demo)**. The ID becomes active and its BV flows up the tree.
+1. Log in as the **new member** (mobile `9123456789`), go to **Activate / Upgrade**, buy the 100 BV package and click **Pay (demo)**. The ID becomes active and its BV flows up the tree.
 2. Log in as **admin**, open **Closings** and click **Run today's closing**. You get a preview with the payout total and payout % of sales; nothing is paid yet.
 3. Try **Approve** as admin. It is refused (maker-checker).
 4. Log in as **finance**, open the closing, click **Approve**, then **Post & credit wallets**.
@@ -135,7 +135,7 @@ Notes:
 
 **Distributor (13):** Dashboard · Activate/Upgrade · Shop & cart · My orders (+ GST invoice, return request) · Genealogy tree · My team (directs / left / right) · Income (with calculation) · Wallet & withdrawals · Ranks & rewards · KYC upload · Profile (details, bank, nominee, password) · Support tickets · Business plan
 
-**Admin (18):** Dashboard · Distributors (+ detail, block, wallet hold, special-bonus verify, reset password) · Genealogy viewer · KYC review · **Staff user management** · Orders & dispatch · Returns/buy-back · Products (+ versioned prices) · Packages (bundle editor) · Closings (run → preview → approve → post) · Withdrawals (+ bank CSV) · Ranks & rewards · Reports (CSV) · Plan settings (versioned) · Support tickets · Audit log
+**Admin (19):** Dashboard · **Distributor Income** (Super Admin: income of every distributor, filters, calculation per line, CSV) · Distributors (+ detail, block, wallet hold, special-bonus verify, **reset / generate password** — Super Admin) · Genealogy viewer · KYC review · **Staff user management** · Orders & dispatch · Returns/buy-back · Products (+ versioned prices) · Packages (bundle editor; **price optional** — empty = total DP of the products) · Closings (run → preview → approve → post) · Withdrawals (+ bank CSV) · Ranks & rewards · Reports (CSV) · Plan settings (versioned) · Support tickets · Audit log
 
 ## 7. Useful commands
 

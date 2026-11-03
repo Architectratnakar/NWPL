@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Boxes, IndianRupee, PackageCheck, Pencil, Plus, RotateCcw, Search, ShoppingCart, Trash2 } from 'lucide-react';
 import { get, openAuthed, patch, post, put } from '@/api/client';
 import { useAuth } from '@/auth/AuthContext';
-import { Badge, Button, Callout, Card, DataTable, Field, Input, Modal, PageHeader, Pagination, Select, Tabs } from '@/components/ui';
+import { Badge, Button, Callout, Card, DataTable, Field, Input, Modal, PageHeader, Pagination, Select, Tabs, useToast } from '@/components/ui';
 import { bv, date, dateTime, inr, num, titleCase } from '@/lib/format';
 import { useAction } from '@/lib/hooks';
 
@@ -79,6 +79,7 @@ export function Products() {
 
 /* ============ PACKAGES ============ */
 export function Packages() {
+  const toast = useToast();
   const { data } = useQuery({ queryKey: ['admin-packages'], queryFn: () => get('/admin/packages') });
   const { data: products } = useQuery({ queryKey: ['admin-products'], queryFn: () => get('/admin/products') });
   const { hasRole } = useAuth();
@@ -90,7 +91,7 @@ export function Packages() {
       <PageHeader icon={<PackageCheck className="h-5 w-5" />} title="Joining packages" subtitle="Each package must contain real products (Direct Selling Rules)" />
       <div className="grid gap-5 lg:grid-cols-3">
         {data?.map((p: any) => (
-          <Card key={p.id} title={p.name} subtitle={`${p.code}${p.isUpgrade ? ' · upgrade' : ''}`} actions={hasRole('ADMIN_SUPER') && <Button size="sm" variant="ghost" icon={<Pencil className="h-4 w-4" />} onClick={() => setForm({ ...p, price: num(p.price), bv: num(p.bv), items: p.items.map((i: any) => ({ productId: i.productId, qty: i.qty })) })}>Edit</Button>}>
+          <Card key={p.id} title={p.name} subtitle={`${p.code}${p.isUpgrade ? ' · upgrade' : ''}`} actions={hasRole('ADMIN_SUPER') && <Button size="sm" variant="ghost" icon={<Pencil className="h-4 w-4" />} onClick={() => setForm({ ...p, price: String(num(p.price)), bv: num(p.bv), items: p.items.map((i: any) => ({ productId: i.productId, qty: i.qty })) })}>Edit</Button>}>
             <div className="flex items-baseline gap-3"><p className="text-3xl font-black">{inr(p.price)}</p><p className="font-semibold text-brand-700">{bv(p.bv)} BV</p><Badge status={p.isActive ? 'ACTIVE' : 'CLOSED'}>{p.isActive ? 'Active' : 'Off'}</Badge></div>
             <ul className="mt-4 space-y-1.5 text-sm">{p.items.map((i: any) => <li key={i.id} className="flex justify-between"><span>{i.product.name}</span><span className="text-slate-500">× {i.qty}</span></li>)}</ul>
             <p className="mt-3 text-xs text-slate-500">Bundle value at DP: {inr(bundleDp(p.items))}</p>
@@ -98,11 +99,17 @@ export function Packages() {
         ))}
       </div>
       <Modal open={!!form} onClose={() => setForm(null)} title={`Edit ${form?.code}`} size="lg"
-        footer={<><Button variant="ghost" onClick={() => setForm(null)}>Cancel</Button><Button loading={busy === 's'} onClick={() => run('s', () => put(`/admin/packages/${form.id}`, { name: form.name, price: num(form.price), bv: num(form.bv), isActive: form.isActive, items: form.items.filter((i: any) => i.productId) }), { success: 'Package saved', invalidate: ['admin-packages', 'packages'] }).then((r) => r && setForm(null))}>Save</Button></>}>
+        footer={<><Button variant="ghost" onClick={() => setForm(null)}>Cancel</Button><Button loading={busy === 's'} disabled={!String(form?.price ?? '').trim() && !form?.items.some((i: any) => i.productId)} onClick={() => run('s', () => put(`/admin/packages/${form.id}`, {
+          name: form.name,
+          price: String(form.price ?? '').trim() === '' ? null : num(form.price),   // empty = calculate from products
+          bv: num(form.bv), isActive: form.isActive, items: form.items.filter((i: any) => i.productId),
+        }), { invalidate: ['admin-packages', 'packages'] }).then((r: any) => { if (r) { toast.success(r.priceAuto ? `Saved — price set to ${inr(r.price)} from the products` : 'Package saved'); setForm(null); } })}>Save</Button></>}>
         {form && <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-3">
             <Field label="Name" className="sm:col-span-3"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
-            <Field label="Price (₹)"><Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} /></Field>
+            <Field label="Price (₹) — optional" hint={`Leave empty to use the products' total DP: ${inr(bundleDp(form.items.filter((i: any) => i.productId)))}`}>
+              <Input type="number" min={0} value={form.price} placeholder={`Auto: ${inr(bundleDp(form.items.filter((i: any) => i.productId)))}`} onChange={(e) => setForm({ ...form, price: e.target.value })} />
+            </Field>
             <Field label="BV"><Input type="number" value={form.bv} onChange={(e) => setForm({ ...form, bv: e.target.value })} /></Field>
             <label className="flex items-center gap-2 self-end pb-3 text-sm"><input type="checkbox" className="h-4 w-4 accent-brand-700" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} /> Active</label>
           </div>
@@ -115,7 +122,7 @@ export function Packages() {
             </div>
           ))}
           <Button variant="outline" size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setForm({ ...form, items: [...form.items, { productId: null, qty: 1 }] })}>Add product</Button>
-          <Callout tone="info">Bundle value at DP: <b>{inr(bundleDp(form.items))}</b> vs package price <b>{inr(form.price)}</b>.</Callout>
+          <Callout tone="info">Bundle value at DP: <b>{inr(bundleDp(form.items.filter((i: any) => i.productId)))}</b> · Package price: <b>{String(form.price ?? '').trim() ? inr(form.price) : 'auto (same as bundle value)'}</b></Callout>
         </div>}
       </Modal>
     </div>

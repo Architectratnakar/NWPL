@@ -25,6 +25,7 @@ import tickets from './modules/tickets';
 import * as adminCore from './modules/admin/core';
 import * as adminCommerce from './modules/admin/commerce';
 import * as adminMoney from './modules/admin/money';
+import * as adminIncome from './modules/admin/income';
 
 export function createApp() {
   const app = express();
@@ -48,6 +49,7 @@ export function createApp() {
     adminCore.dashboard, adminCore.users, adminCore.members, adminCore.kyc, adminCore.auditLog,
     adminCommerce.products, adminCommerce.packages, adminCommerce.ranks, adminCommerce.orders, adminCommerce.returns,
     adminMoney.closings, adminMoney.withdrawals, adminMoney.settings, adminMoney.reports, adminMoney.tickets,
+    adminIncome.income,
   ];
   for (const m of modules) api.use(m.base, m.router);
   api.use((_req, res) => res.status(404).json({ error: { code: 'NOT_FOUND', message: 'API route not found' } }));
