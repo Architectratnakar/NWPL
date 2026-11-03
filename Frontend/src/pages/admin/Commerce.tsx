@@ -91,8 +91,12 @@ export function Packages() {
       <PageHeader icon={<PackageCheck className="h-5 w-5" />} title="Joining packages" subtitle="Each package must contain real products (Direct Selling Rules)" />
       <div className="grid gap-5 lg:grid-cols-3">
         {data?.map((p: any) => (
-          <Card key={p.id} title={p.name} subtitle={`${p.code}${p.isUpgrade ? ' · upgrade' : ''}`} actions={hasRole('ADMIN_SUPER') && <Button size="sm" variant="ghost" icon={<Pencil className="h-4 w-4" />} onClick={() => setForm({ ...p, price: String(num(p.price)), bv: num(p.bv), items: p.items.map((i: any) => ({ productId: i.productId, qty: i.qty })) })}>Edit</Button>}>
-            <div className="flex items-baseline gap-3"><p className="text-3xl font-black">{inr(p.price)}</p><p className="font-semibold text-brand-700">{bv(p.bv)} BV</p><Badge status={p.isActive ? 'ACTIVE' : 'CLOSED'}>{p.isActive ? 'Active' : 'Off'}</Badge></div>
+          <Card key={p.id} title={p.name} subtitle={`${p.code}${p.isUpgrade ? ' · upgrade' : ''}`} actions={hasRole('ADMIN_SUPER') && <Button size="sm" variant="ghost" icon={<Pencil className="h-4 w-4" />} onClick={() => setForm({ ...p, price: p.price === null ? '' : String(num(p.price)), bv: num(p.bv), items: p.items.map((i: any) => ({ productId: i.productId, qty: i.qty })) })}>Edit</Button>}>
+            <div className="flex flex-wrap items-baseline gap-3">
+              {p.price === null ? <p className="text-xl font-bold text-slate-500">No fixed price</p> : <p className="text-3xl font-black">{inr(p.price)}</p>}
+              <p className="font-semibold text-brand-700">{bv(p.bv)} BV</p><Badge status={p.isActive ? 'ACTIVE' : 'CLOSED'}>{p.isActive ? 'Active' : 'Off'}</Badge>
+            </div>
+            {p.price === null && <p className="mt-1 text-xs text-slate-500">Distributors pay the products' current DP ({inr(p.productsTotal)} today)</p>}
             <ul className="mt-4 space-y-1.5 text-sm">{p.items.map((i: any) => <li key={i.id} className="flex justify-between"><span>{i.product.name}</span><span className="text-slate-500">× {i.qty}</span></li>)}</ul>
             <p className="mt-3 text-xs text-slate-500">Bundle value at DP: {inr(bundleDp(p.items))}</p>
           </Card>
@@ -101,14 +105,14 @@ export function Packages() {
       <Modal open={!!form} onClose={() => setForm(null)} title={`Edit ${form?.code}`} size="lg"
         footer={<><Button variant="ghost" onClick={() => setForm(null)}>Cancel</Button><Button loading={busy === 's'} disabled={!String(form?.price ?? '').trim() && !form?.items.some((i: any) => i.productId)} onClick={() => run('s', () => put(`/admin/packages/${form.id}`, {
           name: form.name,
-          price: String(form.price ?? '').trim() === '' ? null : num(form.price),   // empty = calculate from products
+          price: String(form.price ?? '').trim() === '' ? null : num(form.price),   // empty is saved as empty
           bv: num(form.bv), isActive: form.isActive, items: form.items.filter((i: any) => i.productId),
-        }), { invalidate: ['admin-packages', 'packages'] }).then((r: any) => { if (r) { toast.success(r.priceAuto ? `Saved — price set to ${inr(r.price)} from the products` : 'Package saved'); setForm(null); } })}>Save</Button></>}>
+        }), { invalidate: ['admin-packages', 'packages'] }).then((r: any) => { if (r) { toast.success(r.fixedPrice ? 'Package saved' : 'Package saved without a price'); setForm(null); } })}>Save</Button></>}>
         {form && <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-3">
             <Field label="Name" className="sm:col-span-3"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
-            <Field label="Price (₹) — optional" hint={`Leave empty to use the products' total DP: ${inr(bundleDp(form.items.filter((i: any) => i.productId)))}`}>
-              <Input type="number" min={0} value={form.price} placeholder={`Auto: ${inr(bundleDp(form.items.filter((i: any) => i.productId)))}`} onChange={(e) => setForm({ ...form, price: e.target.value })} />
+            <Field label="Price (₹)" hint="Optional — can be left empty">
+              <Input type="number" min={0} value={form.price} placeholder="No price" onChange={(e) => setForm({ ...form, price: e.target.value })} />
             </Field>
             <Field label="BV"><Input type="number" value={form.bv} onChange={(e) => setForm({ ...form, bv: e.target.value })} /></Field>
             <label className="flex items-center gap-2 self-end pb-3 text-sm"><input type="checkbox" className="h-4 w-4 accent-brand-700" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} /> Active</label>
@@ -122,7 +126,7 @@ export function Packages() {
             </div>
           ))}
           <Button variant="outline" size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setForm({ ...form, items: [...form.items, { productId: null, qty: 1 }] })}>Add product</Button>
-          <Callout tone="info">Bundle value at DP: <b>{inr(bundleDp(form.items.filter((i: any) => i.productId)))}</b> · Package price: <b>{String(form.price ?? '').trim() ? inr(form.price) : 'auto (same as bundle value)'}</b></Callout>
+          <Callout tone="info">Bundle value at DP: <b>{inr(bundleDp(form.items.filter((i: any) => i.productId)))}</b>{String(form.price ?? '').trim() ? <> · Package price: <b>{inr(form.price)}</b></> : <> · No fixed price — distributors pay the products' current DP</>}</Callout>
         </div>}
       </Modal>
     </div>

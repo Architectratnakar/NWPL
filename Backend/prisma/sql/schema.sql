@@ -214,7 +214,7 @@ CREATE TABLE "Package" (
     "id"        SERIAL        NOT NULL,
     "code"      TEXT          NOT NULL,                      -- BASIC_40, FULL_100, UPGRADE_60
     "name"      TEXT          NOT NULL,
-    "price"     DECIMAL(12,2) NOT NULL,
+    "price"     DECIMAL(12,2),                           -- optional: empty = current DP of the bundled products
     "bv"        DECIMAL(12,2) NOT NULL,
     "tier"      "PackageTier" NOT NULL,
     "isUpgrade" BOOLEAN       NOT NULL DEFAULT false,

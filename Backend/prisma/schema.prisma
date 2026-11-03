@@ -291,7 +291,7 @@ model Package {
   id        Int           @id @default(autoincrement())
   code      String        @unique          // BASIC_40, FULL_100, UPGRADE_60
   name      String
-  price     Decimal       @db.Decimal(12, 2)
+  price     Decimal?      @db.Decimal(12, 2)   // optional: empty = buyer pays the current DP of the bundled products
   bv        Decimal       @db.Decimal(12, 2)
   tier      PackageTier                    // tier the member gets after buying
   isUpgrade Boolean       @default(false)

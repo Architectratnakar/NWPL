@@ -16,6 +16,8 @@ export function explainDbError(err: unknown): { code: string; message: string; f
       return { code: 'DB_NOT_FOUND', message: `The database in DATABASE_URL does not exist (${where}).`, fix: 'Create it in pgAdmin (Databases → Create → Database) or run: createdb -U postgres mlm' };
     case 'P2021':
       return { code: 'DB_TABLES_MISSING', message: `The database tables have not been created yet (${(err as Prisma.PrismaClientKnownRequestError).meta?.modelName ?? 'table'} is missing).`, fix: 'In the Backend folder run: npx prisma migrate dev --name init   then   npm run db:seed' };
+    case 'P2011':
+      return { code: 'DB_SCHEMA_OUTDATED', message: 'The database is one update behind the code (a column still requires a value).', fix: 'In the Backend folder run: npx prisma migrate dev --name package-price-optional   (or run prisma/sql/update-2026-11-package-price-optional.sql)' };
     case 'P2022':
       return { code: 'DB_SCHEMA_OUTDATED', message: 'The database tables are older than the code (a column is missing).', fix: 'In the Backend folder run: npx prisma migrate dev' };
     default:
@@ -57,6 +59,11 @@ export async function checkDatabase(): Promise<{ ok: boolean; status: string; fi
     return { ok: false, status: x?.message ?? `Database connection failed: ${(e as Error).message}`, fix: x?.fix };
   }
   try {
+    const col = await prisma.$queryRaw<{ is_nullable: string }[]>`
+      SELECT is_nullable FROM information_schema.columns WHERE table_name = 'Package' AND column_name = 'price'`;
+    if (col[0]?.is_nullable === 'NO') {
+      return { ok: true, status: `Connected to ${safeUrl()} — but the database needs one update (optional package price).`, fix: 'Run: npx prisma migrate dev --name package-price-optional   then restart. (Plain SQL: prisma/sql/update-2026-11-package-price-optional.sql)' };
+    }
     const users = await prisma.user.count();
     if (users === 0) return { ok: true, status: `Connected to ${safeUrl()} — tables exist but there is no data yet.`, fix: 'Run: npm run db:seed   (creates the demo logins)' };
     return { ok: true, status: `Connected to ${safeUrl()} — ${users} logins found.` };
