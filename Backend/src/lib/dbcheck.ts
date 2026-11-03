@@ -17,7 +17,7 @@ export function explainDbError(err: unknown): { code: string; message: string; f
     case 'P2021':
       return { code: 'DB_TABLES_MISSING', message: `The database tables have not been created yet (${(err as Prisma.PrismaClientKnownRequestError).meta?.modelName ?? 'table'} is missing).`, fix: 'In the Backend folder run: npx prisma migrate dev --name init   then   npm run db:seed' };
     case 'P2011':
-      return { code: 'DB_SCHEMA_OUTDATED', message: 'The database is one update behind the code (a column still requires a value).', fix: 'In the Backend folder run: npx prisma migrate dev --name package-price-optional   (or run prisma/sql/update-2026-11-package-price-optional.sql)' };
+      return { code: 'DB_SCHEMA_OUTDATED', message: 'The database is one update behind the code (a column still requires a value).', fix: 'Restart the Backend (it applies this update automatically), or in the Backend folder run: npx prisma db execute --schema prisma/schema.prisma --file prisma/sql/update-2026-11-package-price-optional.sql' };
     case 'P2022':
       return { code: 'DB_SCHEMA_OUTDATED', message: 'The database tables are older than the code (a column is missing).', fix: 'In the Backend folder run: npx prisma migrate dev' };
     default:
@@ -50,6 +50,24 @@ function safeUrl() {
   }
 }
 
+/**
+ * Older databases still have "Package"."price" NOT NULL. Removing that rule is safe
+ * (no data changes, nothing is deleted), so the Backend applies it by itself.
+ */
+export async function ensurePackagePriceOptional(): Promise<'ok' | 'applied' | 'failed'> {
+  try {
+    const col = await prisma.$queryRaw<{ is_nullable: string }[]>`
+      SELECT is_nullable FROM information_schema.columns
+      WHERE table_schema = current_schema() AND table_name = 'Package' AND column_name = 'price'`;
+    if (col[0]?.is_nullable !== 'NO') return 'ok';
+    await prisma.$executeRawUnsafe('ALTER TABLE "Package" ALTER COLUMN "price" DROP NOT NULL');
+    return 'applied';
+  } catch (e) {
+    console.warn(`⚠️  Could not make package price optional automatically: ${(e as Error).message}`);
+    return 'failed';
+  }
+}
+
 /** Run once at start-up and print a clear status in the terminal. */
 export async function checkDatabase(): Promise<{ ok: boolean; status: string; fix?: string }> {
   try {
@@ -59,11 +77,11 @@ export async function checkDatabase(): Promise<{ ok: boolean; status: string; fi
     return { ok: false, status: x?.message ?? `Database connection failed: ${(e as Error).message}`, fix: x?.fix };
   }
   try {
-    const col = await prisma.$queryRaw<{ is_nullable: string }[]>`
-      SELECT is_nullable FROM information_schema.columns WHERE table_name = 'Package' AND column_name = 'price'`;
-    if (col[0]?.is_nullable === 'NO') {
-      return { ok: true, status: `Connected to ${safeUrl()} — but the database needs one update (optional package price).`, fix: 'Run: npx prisma migrate dev --name package-price-optional   then restart. (Plain SQL: prisma/sql/update-2026-11-package-price-optional.sql)' };
+    const upd = await ensurePackagePriceOptional();
+    if (upd === 'failed') {
+      return { ok: true, status: `Connected to ${safeUrl()} — but the database needs one update (optional package price) and it could not be applied automatically.`, fix: 'In the Backend folder run: npx prisma db execute --schema prisma/schema.prisma --file prisma/sql/update-2026-11-package-price-optional.sql   then restart.' };
     }
+    if (upd === 'applied') console.log('🔧 Database updated: package price is now optional (empty prices can be saved).');
     const users = await prisma.user.count();
     if (users === 0) return { ok: true, status: `Connected to ${safeUrl()} — tables exist but there is no data yet.`, fix: 'Run: npm run db:seed   (creates the demo logins)' };
     return { ok: true, status: `Connected to ${safeUrl()} — ${users} logins found.` };
