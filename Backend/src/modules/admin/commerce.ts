@@ -5,7 +5,7 @@ import { createModule, PageQuery } from '../../lib/openapi';
 import { ROLES } from '../../lib/auth';
 import { badRequest, notFound } from '../../lib/http';
 import { audit } from '../../lib/audit';
-import { approveReturn, currentPrices, markOrderPaid } from '../../services/orders';
+import { approveReturn, currentPrices, markOrderPaid, packagePrice } from '../../services/orders';
 
 /* ======================= PRODUCTS ======================= */
 export const products = createModule('/admin/products', 'Admin · Products');
@@ -80,9 +80,12 @@ products.get('/:id/prices', {
 export const packages = createModule('/admin/packages', 'Admin · Packages');
 
 packages.get('/', {
-  summary: 'Packages with bundles',
+  summary: 'Packages with bundles (price is null when no fixed price is set)',
   access: ROLES.STAFF,
-  handler: () => prisma.package.findMany({ orderBy: { id: 'asc' }, include: { items: { include: { product: { select: { id: true, name: true, sku: true } } } } } }),
+  handler: async () => {
+    const list = await prisma.package.findMany({ orderBy: { id: 'asc' }, include: { items: { include: { product: { select: { id: true, name: true, sku: true } } } } } });
+    return Promise.all(list.map(async (p) => ({ ...p, productsTotal: (await packagePrice(p)).productsTotal })));
+  },
 });
 
 packages.put('/:id', {
@@ -90,7 +93,7 @@ packages.put('/:id', {
   access: ROLES.SUPER,
   body: z.object({
     name: z.string().min(3),
-    price: z.number().positive().nullable().optional().openapi({ description: 'Optional. Leave empty to use the total DP of the products in the package.' }),
+    price: z.number().positive().nullable().optional().openapi({ description: 'Optional. Empty = no fixed price; buyers pay the current DP of the products.' }),
     bv: z.number().positive(),
     isActive: z.boolean(),
     items: z.array(z.object({ productId: z.number().int(), qty: z.number().int().min(1) })),
@@ -99,23 +102,16 @@ packages.put('/:id', {
     const id = Number(params.id);
     const before = await prisma.package.findUnique({ where: { id }, include: { items: true } });
     if (!before) throw notFound('Package');
-    // Price is optional: when empty, charge the total Distributor Price (DP) of the bundled products
-    let price = body.price ?? null;
-    let priceAuto = false;
-    if (price === null) {
-      if (!body.items.length) throw badRequest('Enter a price, or add products so the price can be calculated');
-      const dp = await currentPrices(body.items.map((i) => i.productId));
-      const missing = body.items.filter((i) => !dp.get(i.productId));
-      if (missing.length) throw badRequest('Some products in the package have no price');
-      price = body.items.reduce((a, i) => a + Number(dp.get(i.productId)!.dp) * i.qty, 0);
-      priceAuto = true;
-    }
+    // Price is optional and is saved EMPTY when not given.
+    // Buyers of a package without a price pay the current DP of its products (see packagePrice()).
+    const price = body.price ?? null;
+    if (price === null && !body.items.length) throw badRequest('Enter a price or add products — otherwise there is nothing to charge');
     await prisma.$transaction([
       prisma.packageItem.deleteMany({ where: { packageId: id } }),
       prisma.package.update({ where: { id }, data: { name: body.name, price, bv: body.bv, isActive: body.isActive, items: { create: body.items } } }),
     ]);
-    await audit(req, 'PACKAGE.UPDATE', 'Package', params.id, before, { ...body, price, priceAuto });
-    return { ok: true, price, priceAuto };
+    await audit(req, 'PACKAGE.UPDATE', 'Package', params.id, before, { ...body, price });
+    return { ok: true, price, fixedPrice: price !== null };
   },
 });
 

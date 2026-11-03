@@ -19,6 +19,17 @@ export async function currentPrices(productIds?: number[]) {
   return map;
 }
 
+/**
+ * Price of a joining / upgrade package.
+ * A package may be saved WITHOUT a price: then the buyer pays the current DP of its products.
+ */
+export async function packagePrice(pkg: { price: Prisma.Decimal | null; items: { productId: number; qty: number }[] }) {
+  const dp = await currentPrices(pkg.items.map((i) => i.productId));
+  const productsTotal = pkg.items.reduce((a, i) => a.add(D(dp.get(i.productId)?.dp ?? 0).mul(i.qty)), D(0));
+  const fixed = pkg.price !== null;
+  return { price: fixed ? D(pkg.price!) : productsTotal, fixedPrice: fixed, productsTotal };
+}
+
 /** GST included in a GST-inclusive amount */
 const gstPart = (gross: Prisma.Decimal, rate: Prisma.Decimal.Value) => gross.sub(gross.div(D(1).add(D(rate).div(100)))).toDecimalPlaces(2);
 
@@ -53,7 +64,9 @@ export async function createOrder(input: CreateOrderInput) {
     const pending = await prisma.order.findFirst({ where: { memberId: member.id, type: input.type, status: 'PENDING_PAYMENT' } });
     if (pending) return pending; // reuse the unpaid order
     packageId = pkg.id;
-    grand = D(pkg.price);
+    const pp = await packagePrice(pkg);
+    if (pp.price.lte(0)) throw badRequest('This package has no price yet. Please contact the company.');
+    grand = pp.price;
     bv = D(pkg.bv);
     // the package price covers the bundled products; item prices are shown as 0 (bundle)
     lines = pkg.items.map((i) => ({ productId: i.productId, qty: i.qty, unitPrice: D(0), unitBv: D(0), gstRate: i.product.gstRate }));

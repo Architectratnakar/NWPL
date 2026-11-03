@@ -10,7 +10,7 @@ import { inr } from '@/lib/format';
 import { useAction } from '@/lib/hooks';
 import PayModal, { type OrderLite } from './PayModal';
 
-interface Pkg { id: number; code: string; name: string; price: string; bv: string; tier: string; isUpgrade: boolean; items: { qty: number; product: { name: string; sku: string } }[] }
+interface Pkg { id: number; code: string; name: string; price: string; fixedPrice: boolean; bv: string; tier: string; isUpgrade: boolean; items: { qty: number; product: { name: string; sku: string } }[] }
 
 export default function Activate() {
   const { user } = useAuth();
@@ -38,6 +38,7 @@ export default function Activate() {
                 <p className={clsx('text-sm font-semibold', featured ? 'text-gold-300' : 'text-slate-500')}>{p.isUpgrade ? 'Upgrade' : 'Joining package'}</p>
                 <p className="mt-1 text-xl font-extrabold">{p.name}</p>
                 <p className="mt-4 text-4xl font-black tracking-tight">{inr(p.price)}</p>
+                {!p.fixedPrice && <p className={clsx('mt-0.5 text-xs', featured ? 'text-brand-100/80' : 'text-slate-500')}>Price = current DP of the products</p>}
                 <p className={clsx('mt-1 text-sm font-semibold', featured ? 'text-brand-100' : 'text-brand-700')}>{Number(p.bv)} BV</p>
               </div>
               <div className="flex flex-1 flex-col p-6">
