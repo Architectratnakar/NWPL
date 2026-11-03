@@ -176,11 +176,13 @@ async function main() {
       const side: 'LEFT' | 'RIGHT' = n % 2 === 0 ? 'LEFT' : 'RIGHT';
       // Ramesh sponsors most people; some are sponsored by his team (spill-over)
       const sameSide = members.filter((x) => x.side === side);
-      const sponsor = sameSide.length > 3 && rand() < 0.35 ? pick(sameSide).code : ramesh.distributorCode;
+      const sponsor = sameSide.length > 2 && rand() < 0.45 ? pick(sameSide).code : ramesh.distributorCode;
+      // team leaders place on both of their own sides, so they earn pair income too
+      const placeSide: 'LEFT' | 'RIGHT' = sponsor === ramesh.distributorCode ? side : rand() < 0.5 ? 'LEFT' : 'RIGHT';
       const name = NAMES[n];
       const tier = rand() < 0.75 ? 'FULL' : 'BASIC';
       const at = new Date(istMidnight(d).getTime() + 9 * 3600_000 + Math.floor(rand() * 8 * 3600_000));
-      const m = await join(sponsor, side, name, tier, at, /a$|i$/.test(name.split(' ')[0]) ? 'FEMALE' : 'MALE');
+      const m = await join(sponsor, placeSide, name, tier, at, /a$|i$/.test(name.split(' ')[0]) ? 'FEMALE' : 'MALE');
       members.push({ code: m.distributorCode, side });
       n++;
     }

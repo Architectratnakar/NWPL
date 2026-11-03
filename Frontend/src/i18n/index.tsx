@@ -13,7 +13,7 @@ const dict = {
     products: 'Products', packages: 'Packages', closings: 'Closings', withdrawals: 'Withdrawals', settings: 'Plan Settings',
     reports: 'Reports', returns: 'Returns', audit: 'Audit Log', tickets: 'Support Tickets', kycQueue: 'KYC Review', rewards: 'Ranks & Rewards',
     network: 'Network', commerce: 'Commerce', earnings: 'Earnings', account: 'Account', admin: 'Administration', finance: 'Finance', system: 'System',
-    adminOrders: 'Orders',
+    adminOrders: 'Orders', distIncome: 'Distributor Income',
   },
   hi: {
     tagline: 'जियो ज़िंदगी शान से', welcome: 'फिर से स्वागत है', loginSub: 'अपने डिस्ट्रीब्यूटर या एडमिन खाते में लॉग इन करें',
@@ -25,7 +25,7 @@ const dict = {
     products: 'उत्पाद', packages: 'पैकेज', closings: 'क्लोज़िंग', withdrawals: 'निकासी', settings: 'प्लान सेटिंग',
     reports: 'रिपोर्ट', returns: 'वापसी', audit: 'ऑडिट लॉग', tickets: 'सहायता टिकट', kycQueue: 'केवाईसी जांच', rewards: 'रैंक और रिवॉर्ड',
     network: 'नेटवर्क', commerce: 'कॉमर्स', earnings: 'कमाई', account: 'खाता', admin: 'प्रशासन', finance: 'वित्त', system: 'सिस्टम',
-    adminOrders: 'ऑर्डर',
+    adminOrders: 'ऑर्डर', distIncome: 'डिस्ट्रीब्यूटर आय',
   },
 } as const;
 

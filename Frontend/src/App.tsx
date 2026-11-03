@@ -39,6 +39,7 @@ const Reports = lazy(() => import('@/pages/admin/Finance').then((m) => ({ defaul
 const Settings = lazy(() => import('@/pages/admin/System').then((m) => ({ default: m.Settings })));
 const AdminTickets = lazy(() => import('@/pages/admin/System').then((m) => ({ default: m.AdminTickets })));
 const Audit = lazy(() => import('@/pages/admin/System').then((m) => ({ default: m.Audit })));
+const AdminIncome = lazy(() => import('@/pages/admin/Income'));
 
 function Guard({ area, children }: { area: 'member' | 'admin'; children: ReactNode }) {
   const { user, loading, isStaff } = useAuth();
@@ -47,6 +48,12 @@ function Guard({ area, children }: { area: 'member' | 'admin'; children: ReactNo
   if (area === 'admin' && !isStaff) return <Navigate to="/app" replace />;
   if (area === 'member' && isStaff) return <Navigate to="/admin" replace />;
   return <>{children}</>;
+}
+
+/** Pages only the Super Admin may open (others are sent to the admin dashboard) */
+function SuperOnly({ children }: { children: ReactNode }) {
+  const { hasRole } = useAuth();
+  return hasRole('ADMIN_SUPER') ? <>{children}</> : <Navigate to="/admin" replace />;
 }
 
 function Home() {
@@ -94,6 +101,7 @@ export default function App() {
         <Route path="returns" element={<S><Returns /></S>} />
         <Route path="closings" element={<S><Closings /></S>} />
         <Route path="closings/:id" element={<S><ClosingDetail /></S>} />
+        <Route path="income" element={<SuperOnly><S><AdminIncome /></S></SuperOnly>} />
         <Route path="withdrawals" element={<S><Withdrawals /></S>} />
         <Route path="ranks" element={<S><RanksAdmin /></S>} />
         <Route path="reports" element={<S><Reports /></S>} />

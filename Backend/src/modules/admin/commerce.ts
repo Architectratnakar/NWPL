@@ -89,19 +89,33 @@ packages.put('/:id', {
   summary: 'Update a package: name, price, BV, active and product bundle',
   access: ROLES.SUPER,
   body: z.object({
-    name: z.string().min(3), price: z.number().positive(), bv: z.number().positive(), isActive: z.boolean(),
+    name: z.string().min(3),
+    price: z.number().positive().nullable().optional().openapi({ description: 'Optional. Leave empty to use the total DP of the products in the package.' }),
+    bv: z.number().positive(),
+    isActive: z.boolean(),
     items: z.array(z.object({ productId: z.number().int(), qty: z.number().int().min(1) })),
   }),
   handler: async ({ params, body, req }) => {
     const id = Number(params.id);
     const before = await prisma.package.findUnique({ where: { id }, include: { items: true } });
     if (!before) throw notFound('Package');
+    // Price is optional: when empty, charge the total Distributor Price (DP) of the bundled products
+    let price = body.price ?? null;
+    let priceAuto = false;
+    if (price === null) {
+      if (!body.items.length) throw badRequest('Enter a price, or add products so the price can be calculated');
+      const dp = await currentPrices(body.items.map((i) => i.productId));
+      const missing = body.items.filter((i) => !dp.get(i.productId));
+      if (missing.length) throw badRequest('Some products in the package have no price');
+      price = body.items.reduce((a, i) => a + Number(dp.get(i.productId)!.dp) * i.qty, 0);
+      priceAuto = true;
+    }
     await prisma.$transaction([
       prisma.packageItem.deleteMany({ where: { packageId: id } }),
-      prisma.package.update({ where: { id }, data: { name: body.name, price: body.price, bv: body.bv, isActive: body.isActive, items: { create: body.items } } }),
+      prisma.package.update({ where: { id }, data: { name: body.name, price, bv: body.bv, isActive: body.isActive, items: { create: body.items } } }),
     ]);
-    await audit(req, 'PACKAGE.UPDATE', 'Package', params.id, before, body);
-    return { ok: true };
+    await audit(req, 'PACKAGE.UPDATE', 'Package', params.id, before, { ...body, price, priceAuto });
+    return { ok: true, price, priceAuto };
   },
 });
 

@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { z } from 'zod';
 import { Prisma, type Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
@@ -199,6 +200,40 @@ members.patch('/:id', {
     return { ok: true };
   },
 });
+
+members.post('/:id/reset-password', {
+  summary: 'Super Admin: set or generate a new password for a distributor (logs them out everywhere)',
+  access: ROLES.SUPER,
+  body: z.object({
+    password: z
+      .string()
+      .min(8, 'At least 8 characters')
+      .regex(/[A-Z]/, 'Needs a capital letter')
+      .regex(/[0-9]/, 'Needs a number')
+      .optional()
+      .openapi({ description: 'Leave empty to generate a strong password automatically' }),
+  }),
+  handler: async ({ params, body, req }) => {
+    const m = await prisma.member.findUnique({ where: { id: params.id }, include: { user: { select: { id: true } } } });
+    if (!m) throw notFound('Distributor');
+    const generated = !body.password;
+    const password = body.password ?? generatePassword();
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: m.user.id }, data: { passwordHash: await bcrypt.hash(password, 10) } }),
+      prisma.refreshToken.updateMany({ where: { userId: m.user.id, revokedAt: null }, data: { revokedAt: new Date() } }),
+    ]);
+    // the password itself is never written to the audit log
+    await audit(req, 'MEMBER.RESET_PASSWORD', 'Member', m.id, undefined, { code: m.distributorCode, generated });
+    return { code: m.distributorCode, name: m.fullName, generated, password: generated ? password : undefined };
+  },
+});
+
+/** Easy to read out on the phone: no 0/O or 1/l/I. Always has a capital, a number and a symbol. */
+function generatePassword() {
+  const pick = (s: string) => s[crypto.randomInt(s.length)];
+  const U = 'ABCDEFGHJKLMNPQRSTUVWXYZ', L = 'abcdefghijkmnopqrstuvwxyz', D = '23456789';
+  return `${pick(U)}${pick(L)}${pick(L)}${pick(L)}@${pick(D)}${pick(D)}${pick(D)}${pick(D)}`;
+}
 
 /* ======================= KYC QUEUE ======================= */
 export const kyc = createModule('/admin/kyc', 'Admin · KYC');

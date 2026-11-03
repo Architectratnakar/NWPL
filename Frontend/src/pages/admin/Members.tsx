@@ -1,15 +1,18 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Eye, GitFork, KeyRound, Search, ShieldAlert, Users } from 'lucide-react';
+import { ArrowLeft, Eye, GitFork, IndianRupee, KeyRound, Search, ShieldAlert, Users } from 'lucide-react';
 import { get, openAuthed, patch, post } from '@/api/client';
 import { useAuth } from '@/auth/AuthContext';
 import { Avatar, Badge, Button, Card, DataTable, Field, Input, KeyValue, Modal, PageHeader, PageLoader, Pagination, Select, StatCard, Textarea } from '@/components/ui';
 import { bv, date, dateTime, inr, titleCase } from '@/lib/format';
 import { useAction } from '@/lib/hooks';
+import ResetPasswordModal, { type ResetTarget } from '@/components/ResetPasswordModal';
 
 export function MembersList() {
   const nav = useNavigate();
+  const { hasRole } = useAuth();
+  const [resetFor, setResetFor] = useState<ResetTarget | null>(null);
   const [q, setQ] = useState('');
   const [filters, setFilters] = useState({ status: '', tier: '', kyc: '' });
   const [page, setPage] = useState(1);
@@ -37,9 +40,15 @@ export function MembersList() {
           { key: 'kyc', header: 'KYC', render: (r: any) => <Badge status={r.kycStatus} /> },
           { key: 'status', header: 'Status', render: (r: any) => <Badge status={r.status} /> },
           { key: 'createdAt', header: 'Joined', render: (r: any) => date(r.createdAt) },
+          ...(hasRole('ADMIN_SUPER') ? [{ key: 'actions', header: '', align: 'right' as const, render: (r: any) => (
+            <div className="flex justify-end gap-1">
+              <Button size="sm" variant="ghost" title="Income" icon={<IndianRupee className="h-4 w-4" />} onClick={(e) => { e.stopPropagation(); nav(`/admin/income?member=${r.id}`); }} aria-label="View income" />
+              <Button size="sm" variant="ghost" title="Reset password" icon={<KeyRound className="h-4 w-4" />} onClick={(e) => { e.stopPropagation(); setResetFor({ id: r.id, code: r.distributorCode, name: r.fullName }); }} aria-label="Reset password" />
+            </div>) }] : []),
         ]} />
         {data && <Pagination page={page} pageSize={data.pageSize} total={data.total} onChange={setPage} />}
       </Card>
+      <ResetPasswordModal target={resetFor} onClose={() => setResetFor(null)} />
     </div>
   );
 }
@@ -52,7 +61,6 @@ export function MemberDetail() {
   const [edit, setEdit] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
   const [form, setForm] = useState<any>({});
-  const [pw, setPw] = useState('');
   const { busy, run } = useAction();
   if (!m) return <PageLoader />;
   const canEdit = hasRole('ADMIN_SUPER', 'ADMIN_OPS');
@@ -71,6 +79,7 @@ export function MemberDetail() {
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" icon={<GitFork className="h-4 w-4" />} onClick={() => nav(`/admin/genealogy?code=${m.distributorCode}`)}>Tree</Button>
           {canEdit && <Button variant="outline" icon={<ShieldAlert className="h-4 w-4" />} onClick={openEdit}>Edit / status</Button>}
+          {hasRole('ADMIN_SUPER') && <Button variant="outline" icon={<IndianRupee className="h-4 w-4" />} onClick={() => nav(`/admin/income?member=${m.id}`)}>Income</Button>}
           {hasRole('ADMIN_SUPER') && <Button variant="outline" icon={<KeyRound className="h-4 w-4" />} onClick={() => setPwOpen(true)}>Reset password</Button>}
         </div>
       </div>
@@ -124,10 +133,7 @@ export function MemberDetail() {
           <Field label="Reason for change (saved in audit log) *"><Textarea value={form.reason ?? ''} onChange={(e) => setForm({ ...form, reason: e.target.value })} /></Field>
         </div>
       </Modal>
-      <Modal open={pwOpen} onClose={() => setPwOpen(false)} title="Set a new password" size="sm"
-        footer={<Button loading={busy === 'pw'} disabled={pw.length < 8} onClick={() => run('pw', () => post(`/admin/users/${m.user.id}/reset-password`, { password: pw }), { success: 'Password reset' }).then((r) => { if (r) { setPwOpen(false); setPw(''); } })}>Reset password</Button>}>
-        <Field label="New password" hint="Tell the distributor to change it after logging in"><Input value={pw} onChange={(e) => setPw(e.target.value)} /></Field>
-      </Modal>
+      <ResetPasswordModal target={pwOpen ? { id: m.id, code: m.distributorCode, name: m.fullName } : null} onClose={() => setPwOpen(false)} />
     </div>
   );
 }
