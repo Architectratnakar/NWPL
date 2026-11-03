@@ -5,6 +5,7 @@ import { createModule, PageQuery } from '../../lib/openapi';
 import { ROLES } from '../../lib/auth';
 import { badRequest, notFound } from '../../lib/http';
 import { audit } from '../../lib/audit';
+import { ensurePackagePriceOptional } from '../../lib/dbcheck';
 import { approveReturn, currentPrices, markOrderPaid, packagePrice } from '../../services/orders';
 
 /* ======================= PRODUCTS ======================= */
@@ -106,10 +107,20 @@ packages.put('/:id', {
     // Buyers of a package without a price pay the current DP of its products (see packagePrice()).
     const price = body.price ?? null;
     if (price === null && !body.items.length) throw badRequest('Enter a price or add products — otherwise there is nothing to charge');
-    await prisma.$transaction([
-      prisma.packageItem.deleteMany({ where: { packageId: id } }),
-      prisma.package.update({ where: { id }, data: { name: body.name, price, bv: body.bv, isActive: body.isActive, items: { create: body.items } } }),
-    ]);
+    const save = () =>
+      prisma.$transaction([
+        prisma.packageItem.deleteMany({ where: { packageId: id } }),
+        prisma.package.update({ where: { id }, data: { name: body.name, price, bv: body.bv, isActive: body.isActive, items: { create: body.items } } }),
+      ]);
+    try {
+      await save();
+    } catch (e) {
+      // Older database where price is still required → apply the (safe) update once and save again
+      const code = (e as { code?: string }).code;
+      const notNull = code === 'P2011' || /null value|not-null|NOT NULL/i.test((e as Error).message ?? '');
+      if (price !== null || !notNull || (await ensurePackagePriceOptional()) !== 'applied') throw e;
+      await save();
+    }
     await audit(req, 'PACKAGE.UPDATE', 'Package', params.id, before, { ...body, price });
     return { ok: true, price, fixedPrice: price !== null };
   },
