@@ -15,11 +15,27 @@ export interface SessionUser {
   rank: string | null;
 }
 
+/** Super Admin sign-in step 2: an OTP was sent by SMS */
+export interface OtpChallenge {
+  otpRequired: true;
+  challengeId: string;
+  sentTo: string;
+  expiresInSeconds: number;
+  resendInSeconds: number;
+  devOtp?: string; // only in development with SMS_PROVIDER=console
+}
+export type LoginResult = { user: SessionUser; otp?: undefined } | { user?: undefined; otp: OtpChallenge };
+
+/** Where each kind of login lands after signing in */
+export const homeFor = (u: Pick<SessionUser, 'role'>) => (STAFF_ROLES.includes(u.role) ? '/admin' : u.role === 'FRANCHISE' ? '/franchise' : '/app');
+
 interface AuthState {
   user: SessionUser | null;
   loading: boolean;
   isStaff: boolean;
-  login: (login: string, password: string) => Promise<SessionUser>;
+  login: (login: string, password: string) => Promise<LoginResult>;
+  verifyOtp: (challengeId: string, otp: string) => Promise<SessionUser>;
+  resendOtp: (challengeId: string) => Promise<OtpChallenge>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   hasRole: (...roles: SessionUser['role'][]) => boolean;
@@ -51,11 +67,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const login = useCallback(async (login: string, password: string) => {
+  const login = useCallback(async (login: string, password: string): Promise<LoginResult> => {
     const r = await api.post('/auth/login', { login, password });
+    if (r.data.data.otpRequired) return { otp: r.data.data as OtpChallenge };
+    qc.clear();
+    return { user: apply(r.data.data) };
+  }, [qc]);
+
+  const verifyOtp = useCallback(async (challengeId: string, otp: string) => {
+    const r = await api.post('/auth/login/verify-otp', { challengeId, otp });
     qc.clear();
     return apply(r.data.data);
   }, [qc]);
+
+  const resendOtp = useCallback(async (challengeId: string) => (await api.post('/auth/login/resend-otp', { challengeId })).data.data as OtpChallenge, []);
 
   const logout = useCallback(async () => {
     await api.post('/auth/logout').catch(() => {});
@@ -72,7 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isStaff = !!user && STAFF_ROLES.includes(user.role);
   const hasRole = (...roles: SessionUser['role'][]) => !!user && roles.includes(user.role);
 
-  return <Ctx.Provider value={{ user, loading, isStaff, login, logout, refreshUser, hasRole }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ user, loading, isStaff, login, verifyOtp, resendOtp, logout, refreshUser, hasRole }}>{children}</Ctx.Provider>;
 }
 
 export const useAuth = () => {

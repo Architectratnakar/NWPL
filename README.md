@@ -50,7 +50,7 @@ Then:
 
 ```bash
 npm install                    # also builds the typed Prisma client (prisma generate)
-npx prisma migrate dev --name init   # creates all 29 tables
+npx prisma migrate dev              # creates all tables (applies every migration in prisma/migrations)
 npm run db:extras              # optional but recommended: DB safety rules, triggers, views
 npm run db:seed                # demo data (products, packages, ranks, logins, a 40-member team)
 npm run dev                    # Backend API on http://localhost:4000
@@ -91,7 +91,8 @@ The login page has these as one-click buttons.
 |---|---|---|---|
 | **Distributor** (Ramesh Kumar) | `NW100001` | `Demo@123` | Dashboard, genealogy tree, income, wallet & withdraw, shop, KYC |
 | **New member** (not activated) | `9123456789` (mobile) | `Demo@123` | Activate with a 40 BV / 100 BV package (demo payment) |
-| **Super Admin** | `admin@navarth.demo` | `Admin@123` | Everything, incl. staff users & plan settings |
+| **Super Admin** | `admin@navarth.demo` | `Admin@123` + **OTP** | Everything, incl. staff users, plan settings and **Autopool**. The OTP goes by SMS to `SUPER_ADMIN_OTP_MOBILE`; in development (`SMS_PROVIDER=console`) it is shown on screen and in the Backend terminal |
+| **Franchise** (Sunita Devi, FR0001) | `NW100002` | `Demo@123` | Franchise panel: new sale at the counter, stock, sales, commission — plus her own distributor area |
 | **Finance** | `finance@navarth.demo` | `Finance@123` | Approve & post closings, process withdrawals |
 | **Operations** | `ops@navarth.demo` | `Ops@123` | Distributors, KYC, orders, returns |
 | **Support** | `support@navarth.demo` | `Support@123` | Support tickets |
@@ -129,6 +130,31 @@ Notes:
 - `npm run start:prod` creates or updates the tables before the server starts. It uses `prisma migrate deploy` when `Backend/prisma/migrations` is committed, and `prisma db push` otherwise.
 - Render's disk is temporary: uploaded KYC files are lost on every deploy. Attach a Render Disk mounted at `Backend/uploads`, or move uploads to S3, before real use.
 
+## New in November 2026
+
+### Autopool (Super Admin → Finance → **Autopool**)
+- One company-wide **4 × 4 matrix**, levels 1–9, filled in joining order ("non-working": placement does not depend on the sponsor). Position *p* has its children at 4(p−1)+2 … 4(p−1)+5, so level progress is plain arithmetic — fast at any size (`Backend/src/engine/autopool.ts`).
+- Plan from the "आटोपुल नॉनवर्किंग 1 से 9 तक" sheet: team 4, 16 … 2,62,144; income ₹400 … ₹2,62,14,400; repurchase condition 20 BV … 5,120 BV on the member's own ID. All numbers are editable in **Settings** (saved as a new plan-settings version).
+- Repurchase rule: **CUMULATIVE** (default — every level needs its own repurchase, so level 3 needs 20+40+80 BV) or **THRESHOLD** (total repurchase BV ≥ the level figure).
+- Income is paid **only through the normal closing** (run → approve by a second person → post) as an `AUTOPOOL` income line, so maker-checker, wallet ledger, income reports and TDS all apply. A level can never be paid twice (unique `(entryId, level)`).
+- New activations take the next position automatically; **Add active IDs** places existing members (oldest activation first). Screens: level table, positions list, matrix view, position detail. Distributors see their own progress under **Earnings → Autopool**.
+- The feature is **OFF** by default — see the legal note below.
+
+### Franchise (Admin → Franchise → **Franchises**)
+- Give a franchise to an **existing distributor** (their login gets a Franchise panel and keeps the member area) or to a **new partner** (a franchise-only login).
+- **Allot** company stock to the franchise / **take it back**; every movement is in a stock ledger.
+- The partner logs in and bills distributors at the counter (**New sale**: repurchase, joining package or upgrade; cash / UPI / card). Stock comes out of the franchise stock, the buyer gets the BV, a GST invoice is generated, and a joining sale activates the ID.
+- **Commission** (% per franchise) on the taxable value of every sale; Finance marks it paid with a UTR. Returns put the stock back to the franchise and cancel unpaid commission.
+- Suspend (no new sales) / close / re-activate a franchise. Roles: Super Admin & Operations manage; Finance pays commission.
+
+### Super Admin login OTP
+- After the correct password, a Super Admin must enter a **6-digit OTP sent by SMS** to `SUPER_ADMIN_OTP_MOBILE` (set to **+917250227201**). 5-minute expiry, 5 wrong tries per OTP, resend after 30 s, max 6 OTPs per 15 min, single use, every step in the audit log.
+- SMS providers: `console` (development), `fast2sms`, `msg91`, `twilio` — see `Backend/.env.example`. Other staff roles and distributors log in as before.
+
+### Upgrading an existing database
+- Prisma Migrate (Render does this automatically): `npx prisma migrate deploy`
+- Plain SQL: `psql -d mlm -f prisma/sql/update-2026-11-autopool-franchise-otp.sql`
+
 ## 6. Screens included
 
 **Public:** Login (logo + plan slides carousel, demo logins, Hindi/English) · Register (sponsor lookup, left/right placement) · Forgot password
@@ -152,8 +178,11 @@ Notes:
 
 ## 8. Before going live: must-do list
 
+- [ ] **Set up the SMS gateway for the Super Admin OTP** (`SMS_PROVIDER`, `SMS_API_KEY`, template id in `Backend/.env`). Until then the OTP only appears in the server log. Indian SMS needs a DLT-registered sender ID and template.
+- [ ] Switch **Autopool** on (Admin → Autopool → Settings) only after the legal review below, and confirm the repurchase rule (each level separately vs. total BV).
+
 - [ ] Replace the **demo payment button** with a real gateway (Razorpay / PayU / Cashfree) and its webhook → `markOrderPaid()` in `Backend/src/services/orders.ts`.
-- [ ] Connect an **SMS / WhatsApp provider** for OTP and password reset (`/auth/forgot-password` currently only logs the request).
+- [ ] Use the same SMS gateway for **password reset** (`/auth/forgot-password` currently only logs the request).
 - [ ] Change every demo password, and set long random `JWT_*` and `ENCRYPTION_SECRET` values.
 - [ ] Fill in the company **GSTIN, address, HSN codes and GST rates** (invoice template: `Backend/src/services/invoice.ts`).
 - [ ] Confirm the open business rules with the company: rank 1–7 thresholds, TDS %, cooling-off days, and whether pairs over the cap are flushed or carried.

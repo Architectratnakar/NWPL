@@ -29,3 +29,19 @@ export const initials = (name?: string | null) =>
     .slice(0, 2)
     .map((p) => p[0]?.toUpperCase())
     .join('');
+
+/** Short note for a non-pair income line (rank name, autopool level …) */
+export const incomeNote = (l: { incomeType: string; detail?: any }) =>
+  l.incomeType === 'AUTOPOOL' && l.detail ? `Level ${l.detail.level} · position #${l.detail.position}` : l.detail?.rankName ?? '—';
+
+/** Key/value rows explaining a non-pair income line */
+export const incomeExplain = (l: { incomeType: string; amount: unknown; detail?: any }): [string, string][] =>
+  l.incomeType === 'AUTOPOOL'
+    ? [
+        ['Type', 'Autopool (4 × 4 matrix)'],
+        ['Pool position', `#${l.detail.position}`],
+        ['Level completed', `Level ${l.detail.level} — ${Number(l.detail.filled).toLocaleString('en-IN')} of ${Number(l.detail.team).toLocaleString('en-IN')} positions filled`],
+        ['Repurchase BV on own ID', `${l.detail.repurchaseBv} BV (needed ${l.detail.requiredBv} BV)`],
+        ['Amount', inr(l.amount)],
+      ]
+    : [['Type', titleCase(l.incomeType)], ['Rank', l.detail?.rankName ?? '—'], ['Amount', inr(l.amount)], ['Reason', l.detail?.reason ?? `Weaker leg BV reached ${l.detail?.weakLegBv}`]];

@@ -4,13 +4,14 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Award, Download, ExternalLink, IndianRupee, Scale, Search, Sparkles, Users, Wallet } from 'lucide-react';
 import { get, openAuthed } from '@/api/client';
 import { Avatar, Badge, Button, Card, DataTable, Field, Input, KeyValue, Modal, PageHeader, Pagination, Select, StatCard, Tabs } from '@/components/ui';
-import { bv, date, dateTime, inr, titleCase } from '@/lib/format';
+import { bv, date, dateTime, incomeExplain, incomeNote, inr, titleCase } from '@/lib/format';
 
 const TYPES = [
   { value: '', label: 'All income types' },
   { value: 'PAIR_MATCHING', label: 'Pair matching' },
   { value: 'RANK_BONUS', label: 'Rank bonus' },
   { value: 'SPECIAL_BONUS', label: 'Special bonus' },
+  { value: 'AUTOPOOL', label: 'Autopool' },
 ];
 
 /** yyyy-mm-dd in Indian time */
@@ -169,7 +170,7 @@ function DistributorIncome({ memberId, range, onClose, onProfile }: { memberId: 
               <DataTable rows={data.lines.items} onRowClick={setLine} empty="No income in this period" columns={[
                 { key: 'date', header: 'Closing date', render: (r: any) => date(r.closing.periodStart) },
                 { key: 'type', header: 'Type', render: (r: any) => <Badge>{titleCase(r.incomeType)}</Badge> },
-                { key: 'pairs', header: 'Pairs / rank', align: 'right', render: (r: any) => (r.incomeType === 'PAIR_MATCHING' ? r.pairs : r.detail?.rankName ?? '—') },
+                { key: 'pairs', header: 'Pairs / rank', align: 'right', render: (r: any) => (r.incomeType === 'PAIR_MATCHING' ? r.pairs : incomeNote(r)) },
                 { key: 'rate', header: 'Calculation', align: 'right', render: (r: any) => r.incomeType !== 'PAIR_MATCHING' ? '—'
                     : r.detail?.fullPairs && r.detail?.basicPairs ? `${r.detail.fullPairs}×₹${r.detail.rates.FULL_FULL} + ${r.detail.basicPairs}×₹${r.detail.rates.DEFAULT}`
                     : `${r.pairs}×${inr(r.rate)}` },
@@ -212,7 +213,7 @@ function DistributorIncome({ memberId, range, onClose, onProfile }: { memberId: 
             <div className="rounded-xl bg-brand-50 p-3 font-semibold text-brand-900">{line.detail.fullPairs} × ₹{line.detail.rates.FULL_FULL} + {line.detail.basicPairs} × ₹{line.detail.rates.DEFAULT} = {inr(line.amount)}</div>
           </div>
         ) : (
-          <KeyValue items={[['Type', titleCase(line.incomeType)], ['Rank', line.detail.rankName], ['Amount', inr(line.amount)], ['Reason', line.detail.reason ?? `Weaker leg BV reached ${line.detail.weakLegBv}`]]} />
+          <KeyValue items={incomeExplain(line)} />
         ))}
       </Modal>
     </Modal>

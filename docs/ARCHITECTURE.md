@@ -155,6 +155,30 @@ The member requests a return within the cooling-off period. When ops approves it
 
 Clawing back commission already paid is a policy decision that is still open; post it as an `ADJUSTMENT` line.
 
+### 4.6 Autopool (4 × 4 matrix, levels 1–9)
+
+```mermaid
+flowchart LR
+  J[Joining paid] -->|feature ON + auto-enter| E[AutopoolEntry: next position p]
+  E --> M["Level k of p = positions 4^k(p-1)+(4^k-1)/3+1 … +4^k-1"]
+  M -->|level full| Q{Own repurchase BV ≥ condition?}
+  Q -- no --> W[Waiting for repurchase]
+  Q -- yes --> C[Closing: AUTOPOOL line] --> A[Approve by 2nd person] --> P[Post: AutopoolPayout + wallet credit]
+```
+
+- `AutopoolEntry(position UNIQUE, memberId UNIQUE)`, positions from an atomic counter.
+- `AutopoolPayout(entryId, level) UNIQUE` → a level is paid once; created only when the closing is posted.
+- Only `ACTIVE` IDs are paid; repurchase BV = net `BvPosting` of `REPURCHASE` orders (returns reduce it).
+
+### 4.7 Franchise
+
+- `Franchise` (one login, role `FRANCHISE`), `FranchiseStock` (qty per product), `FranchiseStockTxn` (ledger: ALLOT / TAKE_BACK / SALE / RETURN), `FranchiseCommission` (one per order, PENDING → PAID / CANCELLED).
+- A counter sale is a normal `Order` with `franchiseId`: `createOrder()` → `markOrderPaid()` takes stock from the franchise (atomic `qty >= n` check) instead of company stock and writes the commission in the same transaction.
+
+### 4.8 Super Admin OTP
+
+`POST /auth/login` (password ok, role ADMIN_SUPER) → `{ otpRequired, challengeId, sentTo }` and an SMS; `POST /auth/login/verify-otp` → session. OTP stored as HMAC, challenge id is 64 random characters.
+
 ## 5. API surface
 
 71 documented endpoints. Full detail is in Swagger at `/api/docs`.

@@ -7,6 +7,11 @@ async function main() {
   const db = await checkDatabase();
   console.log(db.ok ? `✅ Database: ${db.status}` : `\n❌ Database problem: ${db.status}`);
   if (db.fix) console.log(`   ${db.ok ? '👉' : 'Fix:'} ${db.fix}\n`);
+  if (env.SUPER_ADMIN_OTP) {
+    const to = env.SUPER_ADMIN_OTP_MOBILE || "each Super Admin's own mobile";
+    console.log(`🔐 Super Admin login needs an OTP → ${to} (SMS provider: ${env.SMS_PROVIDER})`);
+    if (env.SMS_PROVIDER === 'console') console.log('   ⚠️  SMS_PROVIDER=console: no SMS is sent, the OTP is printed in this log. Set fast2sms / msg91 / twilio in Backend/.env for real SMS.');
+  }
   const app = createApp();
   app.listen(env.PORT, () => {
     console.log(`✅ API running on http://localhost:${env.PORT}`);
