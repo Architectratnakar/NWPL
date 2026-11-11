@@ -1,4 +1,4 @@
-﻿-- Autopool (4 x 4 matrix), Franchise module, Super Admin login OTP
+-- Autopool (4 x 4 matrix), Franchise module, Super Admin login OTP
 --
 -- Written to be SAFE TO RE-RUN: every statement checks first whether the object already
 -- exists. Some databases already had part of these objects (created earlier by
