@@ -1,22 +1,6 @@
 -- Autopool (4 x 4 matrix), Franchise module, Super Admin login OTP
-<<<<<<< HEAD
 
--- CreateEnum
-CREATE TYPE "FranchiseStatus" AS ENUM ('ACTIVE', 'SUSPENDED', 'CLOSED');
 
--- CreateEnum
-CREATE TYPE "FranchiseStockTxnType" AS ENUM ('ALLOT', 'TAKE_BACK', 'SALE', 'RETURN', 'ADJUST');
-
--- CreateEnum
-CREATE TYPE "FranchiseCommissionStatus" AS ENUM ('PENDING', 'PAID', 'CANCELLED');
-
--- AlterTable
-ALTER TABLE "OtpCode" ADD COLUMN "userId" TEXT;
-
--- CreateTable
-CREATE TABLE "AutopoolEntry" (
-=======
---
 -- Written to be SAFE TO RE-RUN: every statement checks first whether the object already
 -- exists. Some databases already had part of these objects (created earlier by
 -- `prisma db push`, by prisma/sql/update-2026-11-autopool-franchise-otp.sql, or by a
@@ -53,6 +37,60 @@ ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "franchiseId" TEXT;
 
 -- ---------- Tables ----------
 CREATE TABLE IF NOT EXISTS "AutopoolEntry" (
+
+
+-- CreateEnum
+CREATE TYPE "FranchiseStatus" AS ENUM ('ACTIVE', 'SUSPENDED', 'CLOSED');
+
+-- CreateEnum
+CREATE TYPE "FranchiseStockTxnType" AS ENUM ('ALLOT', 'TAKE_BACK', 'SALE', 'RETURN', 'ADJUST');
+
+-- CreateEnum
+CREATE TYPE "FranchiseCommissionStatus" AS ENUM ('PENDING', 'PAID', 'CANCELLED');
+
+-- AlterTable
+ALTER TABLE "OtpCode" ADD COLUMN "userId" TEXT;
+
+-- CreateTable
+CREATE TABLE "AutopoolEntry" (
+
+-- Written to be SAFE TO RE-RUN: every statement checks first whether the object already
+-- exists. Some databases already had part of these objects (created earlier by
+-- `prisma db push`, by prisma/sql/update-2026-11-autopool-franchise-otp.sql, or by a
+-- half-finished deploy), which made the plain CREATE statements fail with
+-- "type FranchiseStatus already exists" (P3018).
+
+-- ---------- Enums ----------
+DO $$ BEGIN
+  CREATE TYPE "FranchiseStatus" AS ENUM ('ACTIVE', 'SUSPENDED', 'CLOSED');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+ALTER TYPE "FranchiseStatus" ADD VALUE IF NOT EXISTS 'ACTIVE';
+ALTER TYPE "FranchiseStatus" ADD VALUE IF NOT EXISTS 'SUSPENDED';
+ALTER TYPE "FranchiseStatus" ADD VALUE IF NOT EXISTS 'CLOSED';
+
+DO $$ BEGIN
+  CREATE TYPE "FranchiseStockTxnType" AS ENUM ('ALLOT', 'TAKE_BACK', 'SALE', 'RETURN', 'ADJUST');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+ALTER TYPE "FranchiseStockTxnType" ADD VALUE IF NOT EXISTS 'ALLOT';
+ALTER TYPE "FranchiseStockTxnType" ADD VALUE IF NOT EXISTS 'TAKE_BACK';
+ALTER TYPE "FranchiseStockTxnType" ADD VALUE IF NOT EXISTS 'SALE';
+ALTER TYPE "FranchiseStockTxnType" ADD VALUE IF NOT EXISTS 'RETURN';
+ALTER TYPE "FranchiseStockTxnType" ADD VALUE IF NOT EXISTS 'ADJUST';
+
+DO $$ BEGIN
+  CREATE TYPE "FranchiseCommissionStatus" AS ENUM ('PENDING', 'PAID', 'CANCELLED');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+ALTER TYPE "FranchiseCommissionStatus" ADD VALUE IF NOT EXISTS 'PENDING';
+ALTER TYPE "FranchiseCommissionStatus" ADD VALUE IF NOT EXISTS 'PAID';
+ALTER TYPE "FranchiseCommissionStatus" ADD VALUE IF NOT EXISTS 'CANCELLED';
+
+-- ---------- Columns on existing tables ----------
+ALTER TABLE "OtpCode" ADD COLUMN IF NOT EXISTS "userId" TEXT;
+ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "franchiseId" TEXT;
+
+-- ---------- Tables ----------
+CREATE TABLE IF NOT EXISTS "AutopoolEntry" (
+
     "id" TEXT NOT NULL,
     "position" INTEGER NOT NULL,
     "memberId" TEXT NOT NULL,
@@ -62,7 +100,22 @@ CREATE TABLE IF NOT EXISTS "AutopoolEntry" (
     CONSTRAINT "AutopoolEntry_pkey" PRIMARY KEY ("id")
 );
 
+
 CREATE TABLE IF NOT EXISTS "AutopoolPayout" (
+=======
+
+-- CreateTable
+CREATE TABLE "AutopoolPayout" (
+=======
+CREATE TABLE IF NOT EXISTS "AutopoolPayout" (
+
+=======
+CREATE TABLE IF NOT EXISTS "AutopoolPayout" (
+=======
+-- CreateTable
+CREATE TABLE "AutopoolPayout" (
+
+
     "id" TEXT NOT NULL,
     "entryId" TEXT NOT NULL,
     "memberId" TEXT NOT NULL,
@@ -74,7 +127,22 @@ CREATE TABLE IF NOT EXISTS "AutopoolPayout" (
     CONSTRAINT "AutopoolPayout_pkey" PRIMARY KEY ("id")
 );
 
+
 CREATE TABLE IF NOT EXISTS "Franchise" (
+=======
+
+-- CreateTable
+CREATE TABLE "Franchise" (
+=======
+CREATE TABLE IF NOT EXISTS "Franchise" (
+
+=======
+CREATE TABLE IF NOT EXISTS "Franchise" (
+=======
+-- CreateTable
+CREATE TABLE "Franchise" (
+
+
     "id" TEXT NOT NULL,
     "code" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -99,7 +167,22 @@ CREATE TABLE IF NOT EXISTS "Franchise" (
     CONSTRAINT "Franchise_pkey" PRIMARY KEY ("id")
 );
 
+
 CREATE TABLE IF NOT EXISTS "FranchiseStock" (
+=======
+
+-- CreateTable
+CREATE TABLE "FranchiseStock" (
+=======
+CREATE TABLE IF NOT EXISTS "FranchiseStock" (
+
+=======
+CREATE TABLE IF NOT EXISTS "FranchiseStock" (
+=======
+-- CreateTable
+CREATE TABLE "FranchiseStock" (
+
+
     "franchiseId" TEXT NOT NULL,
     "productId" INTEGER NOT NULL,
     "qty" INTEGER NOT NULL DEFAULT 0,
@@ -108,7 +191,16 @@ CREATE TABLE IF NOT EXISTS "FranchiseStock" (
     CONSTRAINT "FranchiseStock_pkey" PRIMARY KEY ("franchiseId","productId")
 );
 
+
 CREATE TABLE IF NOT EXISTS "FranchiseStockTxn" (
+=======
+
+-- CreateTable
+CREATE TABLE "FranchiseStockTxn" (
+CREATE TABLE IF NOT EXISTS "FranchiseStockTxn" (
+CREATE TABLE IF NOT EXISTS "FranchiseStockTxn" (
+-- CreateTable
+CREATE TABLE "FranchiseStockTxn" (
     "id" TEXT NOT NULL,
     "franchiseId" TEXT NOT NULL,
     "productId" INTEGER NOT NULL,
@@ -124,6 +216,13 @@ CREATE TABLE IF NOT EXISTS "FranchiseStockTxn" (
 );
 
 CREATE TABLE IF NOT EXISTS "FranchiseCommission" (
+
+-- CreateTable
+CREATE TABLE "FranchiseCommission" (
+CREATE TABLE IF NOT EXISTS "FranchiseCommission" (
+CREATE TABLE IF NOT EXISTS "FranchiseCommission" (
+-- CreateTable
+CREATE TABLE "FranchiseCommission" (
     "id" TEXT NOT NULL,
     "franchiseId" TEXT NOT NULL,
     "orderId" TEXT NOT NULL,
@@ -138,6 +237,8 @@ CREATE TABLE IF NOT EXISTS "FranchiseCommission" (
 
     CONSTRAINT "FranchiseCommission_pkey" PRIMARY KEY ("id")
 );
+
+
 
 -- ---------- Indexes ----------
 CREATE INDEX IF NOT EXISTS "OtpCode_userId_createdAt_idx" ON "OtpCode"("userId", "createdAt");
@@ -198,3 +299,137 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   ALTER TABLE "FranchiseCommission" ADD CONSTRAINT "FranchiseCommission_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "Order"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+
+-- CreateIndex
+CREATE INDEX "OtpCode_userId_createdAt_idx" ON "OtpCode"("userId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "Order_franchiseId_createdAt_idx" ON "Order"("franchiseId", "createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AutopoolEntry_position_key" ON "AutopoolEntry"("position");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AutopoolEntry_memberId_key" ON "AutopoolEntry"("memberId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AutopoolPayout_closingLineId_key" ON "AutopoolPayout"("closingLineId");
+
+-- CreateIndex
+CREATE INDEX "AutopoolPayout_memberId_idx" ON "AutopoolPayout"("memberId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AutopoolPayout_entryId_level_key" ON "AutopoolPayout"("entryId", "level");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Franchise_code_key" ON "Franchise"("code");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Franchise_userId_key" ON "Franchise"("userId");
+
+-- CreateIndex
+CREATE INDEX "Franchise_status_idx" ON "Franchise"("status");
+
+-- CreateIndex
+CREATE INDEX "FranchiseStockTxn_franchiseId_createdAt_idx" ON "FranchiseStockTxn"("franchiseId", "createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "FranchiseCommission_orderId_key" ON "FranchiseCommission"("orderId");
+
+-- CreateIndex
+CREATE INDEX "FranchiseCommission_franchiseId_status_idx" ON "FranchiseCommission"("franchiseId", "status");
+
+-- AddForeignKey
+ALTER TABLE "Order" ADD CONSTRAINT "Order_franchiseId_fkey" FOREIGN KEY ("franchiseId") REFERENCES "Franchise"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AutopoolEntry" ADD CONSTRAINT "AutopoolEntry_memberId_fkey" FOREIGN KEY ("memberId") REFERENCES "Member"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AutopoolPayout" ADD CONSTRAINT "AutopoolPayout_entryId_fkey" FOREIGN KEY ("entryId") REFERENCES "AutopoolEntry"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Franchise" ADD CONSTRAINT "Franchise_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Franchise" ADD CONSTRAINT "Franchise_ownerMemberId_fkey" FOREIGN KEY ("ownerMemberId") REFERENCES "Member"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FranchiseStock" ADD CONSTRAINT "FranchiseStock_franchiseId_fkey" FOREIGN KEY ("franchiseId") REFERENCES "Franchise"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FranchiseStock" ADD CONSTRAINT "FranchiseStock_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FranchiseStockTxn" ADD CONSTRAINT "FranchiseStockTxn_franchiseId_fkey" FOREIGN KEY ("franchiseId") REFERENCES "Franchise"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FranchiseStockTxn" ADD CONSTRAINT "FranchiseStockTxn_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FranchiseCommission" ADD CONSTRAINT "FranchiseCommission_franchiseId_fkey" FOREIGN KEY ("franchiseId") REFERENCES "Franchise"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FranchiseCommission" ADD CONSTRAINT "FranchiseCommission_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "Order"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- ---------- Indexes ----------
+CREATE INDEX IF NOT EXISTS "OtpCode_userId_createdAt_idx" ON "OtpCode"("userId", "createdAt");
+CREATE INDEX IF NOT EXISTS "Order_franchiseId_createdAt_idx" ON "Order"("franchiseId", "createdAt");
+CREATE UNIQUE INDEX IF NOT EXISTS "AutopoolEntry_position_key" ON "AutopoolEntry"("position");
+CREATE UNIQUE INDEX IF NOT EXISTS "AutopoolEntry_memberId_key" ON "AutopoolEntry"("memberId");
+CREATE UNIQUE INDEX IF NOT EXISTS "AutopoolPayout_closingLineId_key" ON "AutopoolPayout"("closingLineId");
+CREATE INDEX IF NOT EXISTS "AutopoolPayout_memberId_idx" ON "AutopoolPayout"("memberId");
+CREATE UNIQUE INDEX IF NOT EXISTS "AutopoolPayout_entryId_level_key" ON "AutopoolPayout"("entryId", "level");
+CREATE UNIQUE INDEX IF NOT EXISTS "Franchise_code_key" ON "Franchise"("code");
+CREATE UNIQUE INDEX IF NOT EXISTS "Franchise_userId_key" ON "Franchise"("userId");
+CREATE INDEX IF NOT EXISTS "Franchise_status_idx" ON "Franchise"("status");
+CREATE INDEX IF NOT EXISTS "FranchiseStockTxn_franchiseId_createdAt_idx" ON "FranchiseStockTxn"("franchiseId", "createdAt");
+CREATE UNIQUE INDEX IF NOT EXISTS "FranchiseCommission_orderId_key" ON "FranchiseCommission"("orderId");
+CREATE INDEX IF NOT EXISTS "FranchiseCommission_franchiseId_status_idx" ON "FranchiseCommission"("franchiseId", "status");
+
+-- ---------- Foreign keys (skipped when a constraint with the same name exists) ----------
+DO $$ BEGIN
+  ALTER TABLE "Order" ADD CONSTRAINT "Order_franchiseId_fkey" FOREIGN KEY ("franchiseId") REFERENCES "Franchise"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  ALTER TABLE "AutopoolEntry" ADD CONSTRAINT "AutopoolEntry_memberId_fkey" FOREIGN KEY ("memberId") REFERENCES "Member"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  ALTER TABLE "AutopoolPayout" ADD CONSTRAINT "AutopoolPayout_entryId_fkey" FOREIGN KEY ("entryId") REFERENCES "AutopoolEntry"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  ALTER TABLE "Franchise" ADD CONSTRAINT "Franchise_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  ALTER TABLE "Franchise" ADD CONSTRAINT "Franchise_ownerMemberId_fkey" FOREIGN KEY ("ownerMemberId") REFERENCES "Member"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  ALTER TABLE "FranchiseStock" ADD CONSTRAINT "FranchiseStock_franchiseId_fkey" FOREIGN KEY ("franchiseId") REFERENCES "Franchise"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  ALTER TABLE "FranchiseStock" ADD CONSTRAINT "FranchiseStock_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  ALTER TABLE "FranchiseStockTxn" ADD CONSTRAINT "FranchiseStockTxn_franchiseId_fkey" FOREIGN KEY ("franchiseId") REFERENCES "Franchise"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  ALTER TABLE "FranchiseStockTxn" ADD CONSTRAINT "FranchiseStockTxn_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  ALTER TABLE "FranchiseCommission" ADD CONSTRAINT "FranchiseCommission_franchiseId_fkey" FOREIGN KEY ("franchiseId") REFERENCES "Franchise"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  ALTER TABLE "FranchiseCommission" ADD CONSTRAINT "FranchiseCommission_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "Order"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
