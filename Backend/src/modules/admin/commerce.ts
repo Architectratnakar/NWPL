@@ -204,12 +204,12 @@ orders.patch('/:id/status', {
   summary: 'Move an order through dispatch (SHIPPED / DELIVERED / CANCELLED) or mark a pending order paid (cash at franchise)',
   access: ROLES.OPS,
   body: z.object({ status: z.enum(['PAID', 'SHIPPED', 'DELIVERED', 'CANCELLED']), note: z.string().optional() }),
-  handler: async ({ params, body, req }) => {
+  handler: async ({ params, body, req, user }) => {
     const o = await prisma.order.findUnique({ where: { id: params.id } });
     if (!o) throw notFound('Order');
     if (body.status === 'PAID') {
       if (o.status !== 'PENDING_PAYMENT') throw badRequest('Only unpaid orders can be marked paid');
-      await markOrderPaid(o.id, 'CASH_FRANCHISE', `CASH-${Date.now()}`);
+      await markOrderPaid(o.id, 'CASH_FRANCHISE', `CASH-${Date.now()}`, user.id);
     } else if (body.status === 'CANCELLED') {
       if (o.status !== 'PENDING_PAYMENT') throw badRequest('Paid orders must go through a return, not cancel');
       await prisma.order.update({ where: { id: o.id }, data: { status: 'CANCELLED' } });
@@ -242,8 +242,8 @@ returns.post('/:id/decision', {
   summary: 'Approve (refund + reverse BV) or reject a return',
   access: ROLES.OPS,
   body: z.object({ approve: z.boolean() }),
-  handler: async ({ params, body, req }) => {
-    if (body.approve) await approveReturn(params.id);
+  handler: async ({ params, body, req, user }) => {
+    if (body.approve) await approveReturn(params.id, user.id);
     else await prisma.returnRequest.update({ where: { id: params.id }, data: { status: 'REJECTED' } });
     await audit(req, body.approve ? 'RETURN.APPROVE' : 'RETURN.REJECT', 'ReturnRequest', params.id);
     return { ok: true };

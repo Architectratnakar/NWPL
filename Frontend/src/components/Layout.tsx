@@ -4,7 +4,7 @@ import clsx from 'clsx';
 import {
   Award, BadgeCheck, BarChart3, Boxes, ClipboardList, FileClock, FileText, GitFork, HandCoins, Headphones, IdCard, LayoutDashboard,
   LogOut, Menu, Package, PackageCheck, Presentation, RotateCcw, Settings2, ShieldCheck, ShoppingBag, ShoppingCart, Sparkles, UserCog,
-  Users, Wallet, X, Zap, Network, Languages, IndianRupee,
+  Users, Wallet, X, Zap, Network, Languages, IndianRupee, Layers, Store, Receipt, UserRound,
 } from 'lucide-react';
 import { useAuth, type SessionUser } from '@/auth/AuthContext';
 import { useT, type TKey } from '@/i18n';
@@ -18,7 +18,8 @@ const memberNav: NavGroup[] = [
   { label: 'dashboard', items: [{ to: '/app', label: 'dashboard', icon: <LayoutDashboard className={I} /> }, { to: '/app/activate', label: 'activate', icon: <Zap className={I} /> }] },
   { label: 'network', items: [{ to: '/app/genealogy', label: 'genealogy', icon: <GitFork className={I} /> }, { to: '/app/team', label: 'team', icon: <Users className={I} /> }] },
   { label: 'commerce', items: [{ to: '/app/shop', label: 'shop', icon: <ShoppingBag className={I} /> }, { to: '/app/orders', label: 'orders', icon: <Package className={I} /> }] },
-  { label: 'earnings', items: [{ to: '/app/income', label: 'income', icon: <BarChart3 className={I} /> }, { to: '/app/wallet', label: 'wallet', icon: <Wallet className={I} /> }, { to: '/app/ranks', label: 'ranks', icon: <Award className={I} /> }] },
+  { label: 'earnings', items: [{ to: '/app/income', label: 'income', icon: <BarChart3 className={I} /> }, { to: '/app/autopool', label: 'autopool', icon: <Layers className={I} /> }, { to: '/app/wallet', label: 'wallet', icon: <Wallet className={I} /> }, { to: '/app/ranks', label: 'ranks', icon: <Award className={I} /> }] },
+  { label: 'franchise', items: [{ to: '/franchise', label: 'franchisePanel', icon: <Store className={I} />, roles: ['FRANCHISE'] }] },
   { label: 'account', items: [{ to: '/app/kyc', label: 'kyc', icon: <BadgeCheck className={I} /> }, { to: '/app/profile', label: 'profile', icon: <IdCard className={I} /> }, { to: '/app/support', label: 'support', icon: <Headphones className={I} /> }, { to: '/app/plan', label: 'plan', icon: <Presentation className={I} /> }] },
 ];
 
@@ -40,9 +41,13 @@ const adminNav: NavGroup[] = [
   { label: 'finance', items: [
     { to: '/admin/closings', label: 'closings', icon: <ClipboardList className={I} />, roles: ['ADMIN_SUPER', 'ADMIN_FINANCE', 'ADMIN_OPS', 'COMPLIANCE'] },
     { to: '/admin/income', label: 'distIncome', icon: <IndianRupee className={I} />, roles: ['ADMIN_SUPER'] },
+    { to: '/admin/autopool', label: 'autopool', icon: <Layers className={I} />, roles: ['ADMIN_SUPER'] },
     { to: '/admin/withdrawals', label: 'withdrawals', icon: <HandCoins className={I} />, roles: FIN },
     { to: '/admin/ranks', label: 'rewards', icon: <Award className={I} /> },
     { to: '/admin/reports', label: 'reports', icon: <FileText className={I} />, roles: ['ADMIN_SUPER', 'ADMIN_FINANCE', 'ADMIN_OPS', 'COMPLIANCE'] },
+  ] },
+  { label: 'franchise', items: [
+    { to: '/admin/franchises', label: 'franchises', icon: <Store className={I} />, roles: ['ADMIN_SUPER', 'ADMIN_OPS', 'ADMIN_FINANCE'] },
   ] },
   { label: 'system', items: [
     { to: '/admin/tickets', label: 'tickets', icon: <Headphones className={I} />, roles: ['ADMIN_SUPER', 'ADMIN_OPS', 'SUPPORT', 'COMPLIANCE'] },
@@ -52,6 +57,18 @@ const adminNav: NavGroup[] = [
   ] },
 ];
 void OPS;
+
+const franchiseNav: NavGroup[] = [
+  { label: 'franchise', items: [
+    { to: '/franchise', label: 'dashboard', icon: <LayoutDashboard className={I} /> },
+    { to: '/franchise/sale', label: 'newSale', icon: <ShoppingCart className={I} /> },
+    { to: '/franchise/sales', label: 'sales', icon: <Receipt className={I} /> },
+    { to: '/franchise/stock', label: 'myStock', icon: <Boxes className={I} /> },
+    { to: '/franchise/commission', label: 'commission', icon: <Wallet className={I} /> },
+  ] },
+];
+/** shown in the franchise panel when the partner is also a distributor */
+const franchiseMemberNav: NavGroup = { label: 'account', items: [{ to: '/app', label: 'myDistributorAccount', icon: <UserRound className={I} /> }] };
 
 export function Logo({ dark = false, compact = false }: { dark?: boolean; compact?: boolean }) {
   return (
@@ -71,14 +88,15 @@ function roleLabel(r: SessionUser['role']) {
   return ({ ADMIN_SUPER: 'Super Admin', ADMIN_OPS: 'Operations', ADMIN_FINANCE: 'Finance', COMPLIANCE: 'Compliance', SUPPORT: 'Support', MEMBER: 'Distributor', FRANCHISE: 'Franchise' } as const)[r];
 }
 
-export default function AppLayout({ area }: { area: 'member' | 'admin' }) {
+export default function AppLayout({ area }: { area: 'member' | 'admin' | 'franchise' }) {
   const { user, logout } = useAuth();
   const { t, lang, setLang } = useT();
   const [open, setOpen] = useState(false);
   const loc = useLocation();
   const nav = useNavigate();
   useEffect(() => setOpen(false), [loc.pathname]);
-  const groups = (area === 'member' ? memberNav : adminNav)
+  const navFor = area === 'member' ? memberNav : area === 'franchise' ? [...franchiseNav, ...(user?.memberId ? [franchiseMemberNav] : [])] : adminNav;
+  const groups = navFor
     .map((g) => ({ ...g, items: g.items.filter((i) => !i.roles || (user && i.roles.includes(user.role))) }))
     .filter((g) => g.items.length);
 
@@ -109,7 +127,7 @@ export default function AppLayout({ area }: { area: 'member' | 'admin' }) {
             <p className="mb-1 px-3 text-[10.5px] font-bold uppercase tracking-[0.12em] text-brand-300/70">{t(g.label)}</p>
             <div className="space-y-0.5">
               {g.items.map((i) => (
-                <NavLink key={i.to} to={i.to} end={i.to === '/app' || i.to === '/admin'}
+                <NavLink key={i.to} to={i.to} end={i.to === '/app' || i.to === '/admin' || i.to === '/franchise'}
                   className={({ isActive }) => clsx('flex items-center gap-3 rounded-xl px-3 py-[7px] text-[13.5px] font-medium transition',
                     isActive ? 'bg-white text-brand-900 shadow-sm' : 'text-brand-100/85 hover:bg-white/[0.07] hover:text-white')}>
                   {i.icon}{t(i.label)}
@@ -140,7 +158,7 @@ export default function AppLayout({ area }: { area: 'member' | 'admin' }) {
         <button className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 lg:hidden" onClick={() => setOpen(true)} aria-label="Open menu"><Menu className="h-5 w-5" /></button>
         <div className="lg:hidden"><Logo compact /></div>
         <div className="hidden text-sm text-slate-500 lg:block">
-          {area === 'admin' ? <span className="font-semibold text-slate-700">{t('admin')}</span> : <span>Namaste, <b className="text-slate-800">{user?.name?.split(' ')[0]}</b> 🙏</span>}
+          {area === 'admin' ? <span className="font-semibold text-slate-700">{t('admin')}</span> : area === 'franchise' ? <span className="font-semibold text-slate-700">{t('franchiseCounter')}</span> : <span>Namaste, <b className="text-slate-800">{user?.name?.split(' ')[0]}</b> 🙏</span>}
         </div>
         <div className="ml-auto flex items-center gap-2">
           <button onClick={() => setLang(lang === 'en' ? 'hi' : 'en')} className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50" title="Change language">
