@@ -59,9 +59,23 @@ try {
 // ---------- 2. tables ----------
 function prisma(args) {
   console.log(`\n> prisma ${args}`);
-  const r = spawnSync(isWin ? 'npx.cmd' : 'npx', ['prisma', ...args.split(' ')], { cwd: root, encoding: 'utf8', env: process.env, shell: isWin });
-  const out = `${r.stdout ?? ''}${r.stderr ?? ''}`;
+  const started = Date.now();
+  const r = spawnSync(isWin ? 'npx.cmd' : 'npx', ['prisma', ...args.split(' ')], {
+    cwd: root,
+    encoding: 'utf8',
+    env: process.env,
+    shell: isWin,
+    timeout: 5 * 60 * 1000, // never hang silently until the host restarts the instance
+    maxBuffer: 20 * 1024 * 1024,
+  });
+  let out = `${r.stdout ?? ''}${r.stderr ?? ''}`;
+  if (r.error) {
+    out += r.error.code === 'ETIMEDOUT'
+      ? '\nTIMEOUT: this Prisma step did not finish in 5 minutes. Another connection is probably holding a lock on the database (an old instance still running, or a stuck session).\n'
+      : `\nCould not run Prisma: ${r.error.message}\n`;
+  }
   process.stdout.write(out);
+  console.log(`(prisma ${args.split(' ')[0]} ${args.split(' ')[1] ?? ''} finished in ${Math.round((Date.now() - started) / 1000)}s, exit code ${r.status})`);
   return { ok: r.status === 0, out };
 }
 
@@ -78,6 +92,22 @@ function explain(out) {
 const migrationsDir = path.join(root, 'prisma', 'migrations');
 const hasMigrations =
   fs.existsSync(migrationsDir) && fs.readdirSync(migrationsDir).some((f) => fs.statSync(path.join(migrationsDir, f)).isDirectory());
+
+// A git merge can leave "<<<<<<< HEAD / ======= / >>>>>>>" lines inside a migration file.
+// Postgres cannot run such a file, so stop here with a clear message instead of failing inside Prisma.
+if (hasMigrations) {
+  const broken = fs
+    .readdirSync(migrationsDir)
+    .map((d) => path.join(migrationsDir, d, 'migration.sql'))
+    .filter((f) => fs.existsSync(f) && /^(<<<<<<< |=======\s*$|>>>>>>> )/m.test(fs.readFileSync(f, 'utf8')));
+  if (broken.length) {
+    fail('A migration file still contains git merge-conflict markers (<<<<<<< / ======= / >>>>>>>)', [
+      ...broken.map((f) => path.relative(root, f)),
+      'Replace the file with the clean version (open it, keep one copy of the SQL, delete the marker lines), commit and push.',
+      'Nothing was changed in the database.',
+    ]);
+  }
+}
 
 let r = hasMigrations ? prisma('migrate deploy') : prisma('db push --skip-generate');
 if (!r.ok && hasMigrations && /P3005/.test(r.out)) {

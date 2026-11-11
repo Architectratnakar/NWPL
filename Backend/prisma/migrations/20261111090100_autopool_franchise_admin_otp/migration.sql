@@ -101,6 +101,9 @@ CREATE TABLE IF NOT EXISTS "AutopoolEntry" (
 );
 
 
+CREATE TABLE IF NOT EXISTS "AutopoolPayout" (
+=======
+
 -- CreateTable
 CREATE TABLE "AutopoolPayout" (
 =======
@@ -111,6 +114,7 @@ CREATE TABLE IF NOT EXISTS "AutopoolPayout" (
 =======
 -- CreateTable
 CREATE TABLE "AutopoolPayout" (
+
 
     "id" TEXT NOT NULL,
     "entryId" TEXT NOT NULL,
@@ -124,6 +128,9 @@ CREATE TABLE "AutopoolPayout" (
 );
 
 
+CREATE TABLE IF NOT EXISTS "Franchise" (
+=======
+
 -- CreateTable
 CREATE TABLE "Franchise" (
 =======
@@ -134,6 +141,7 @@ CREATE TABLE IF NOT EXISTS "Franchise" (
 =======
 -- CreateTable
 CREATE TABLE "Franchise" (
+
 
     "id" TEXT NOT NULL,
     "code" TEXT NOT NULL,
@@ -160,6 +168,9 @@ CREATE TABLE "Franchise" (
 );
 
 
+CREATE TABLE IF NOT EXISTS "FranchiseStock" (
+=======
+
 -- CreateTable
 CREATE TABLE "FranchiseStock" (
 =======
@@ -170,6 +181,7 @@ CREATE TABLE IF NOT EXISTS "FranchiseStock" (
 =======
 -- CreateTable
 CREATE TABLE "FranchiseStock" (
+
 
     "franchiseId" TEXT NOT NULL,
     "productId" INTEGER NOT NULL,
@@ -180,17 +192,15 @@ CREATE TABLE "FranchiseStock" (
 );
 
 
--- CreateTable
-CREATE TABLE "FranchiseStockTxn" (
-=======
-CREATE TABLE IF NOT EXISTS "FranchiseStockTxn" (
-
-=======
 CREATE TABLE IF NOT EXISTS "FranchiseStockTxn" (
 =======
+
 -- CreateTable
 CREATE TABLE "FranchiseStockTxn" (
-
+CREATE TABLE IF NOT EXISTS "FranchiseStockTxn" (
+CREATE TABLE IF NOT EXISTS "FranchiseStockTxn" (
+-- CreateTable
+CREATE TABLE "FranchiseStockTxn" (
     "id" TEXT NOT NULL,
     "franchiseId" TEXT NOT NULL,
     "productId" INTEGER NOT NULL,
@@ -205,17 +215,14 @@ CREATE TABLE "FranchiseStockTxn" (
     CONSTRAINT "FranchiseStockTxn_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
-CREATE TABLE "FranchiseCommission" (
-=======
 CREATE TABLE IF NOT EXISTS "FranchiseCommission" (
 
-=======
-CREATE TABLE IF NOT EXISTS "FranchiseCommission" (
-=======
 -- CreateTable
 CREATE TABLE "FranchiseCommission" (
-
+CREATE TABLE IF NOT EXISTS "FranchiseCommission" (
+CREATE TABLE IF NOT EXISTS "FranchiseCommission" (
+-- CreateTable
+CREATE TABLE "FranchiseCommission" (
     "id" TEXT NOT NULL,
     "franchiseId" TEXT NOT NULL,
     "orderId" TEXT NOT NULL,
@@ -232,7 +239,7 @@ CREATE TABLE "FranchiseCommission" (
 );
 
 
-=======
+
 -- ---------- Indexes ----------
 CREATE INDEX IF NOT EXISTS "OtpCode_userId_createdAt_idx" ON "OtpCode"("userId", "createdAt");
 CREATE INDEX IF NOT EXISTS "Order_franchiseId_createdAt_idx" ON "Order"("franchiseId", "createdAt");
@@ -292,7 +299,7 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   ALTER TABLE "FranchiseCommission" ADD CONSTRAINT "FranchiseCommission_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "Order"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-=======
+
 
 -- CreateIndex
 CREATE INDEX "OtpCode_userId_createdAt_idx" ON "OtpCode"("userId", "createdAt");
@@ -366,7 +373,6 @@ ALTER TABLE "FranchiseCommission" ADD CONSTRAINT "FranchiseCommission_franchiseI
 -- AddForeignKey
 ALTER TABLE "FranchiseCommission" ADD CONSTRAINT "FranchiseCommission_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "Order"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
-=======
 -- ---------- Indexes ----------
 CREATE INDEX IF NOT EXISTS "OtpCode_userId_createdAt_idx" ON "OtpCode"("userId", "createdAt");
 CREATE INDEX IF NOT EXISTS "Order_franchiseId_createdAt_idx" ON "Order"("franchiseId", "createdAt");
@@ -426,6 +432,4 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   ALTER TABLE "FranchiseCommission" ADD CONSTRAINT "FranchiseCommission_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "Order"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-
-=======
 
