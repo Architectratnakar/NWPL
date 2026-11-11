@@ -85,6 +85,22 @@ if (!r.ok && hasMigrations && /P3005/.test(r.out)) {
   console.log('\nℹ️  The database already has tables but no migration history (P3005). Syncing with `prisma db push` instead.');
   r = prisma('db push --skip-generate');
 }
+if (!r.ok && hasMigrations && /P3009|P3018/.test(r.out)) {
+  // A migration failed (now, or on an earlier deploy) and Prisma refuses to continue until it is
+  // marked as rolled back. Our migrations are written to be safe to re-run, so mark it and retry once.
+  const found = [
+    ...r.out.matchAll(/Migration name: (\d{14}_[A-Za-z0-9_]+)/g), // P3018
+    ...r.out.matchAll(/The `(\d{14}_[A-Za-z0-9_]+)` migration started at/g), // P3009
+  ];
+  const names = [...new Set(found.map((m) => m[1]))];
+  const local = new Set(fs.readdirSync(migrationsDir));
+  const failed = names.filter((n) => local.has(n));
+  if (failed.length) {
+    console.log(`\nℹ️  Migration(s) marked as failed: ${failed.join(', ')}. Marking as rolled back and retrying once.`);
+    for (const n of failed) prisma(`migrate resolve --rolled-back ${n}`);
+    r = prisma('migrate deploy');
+  }
+}
 if (!r.ok) fail('Could not create / update the database tables', explain(r.out));
 console.log('✔ Database tables are ready');
 
