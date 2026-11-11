@@ -37,5 +37,11 @@ services:
         value: lax
       - key: DEMO_PAYMENTS
         value: "true"
+      - key: SUPER_ADMIN_OTP
+        value: "true"
+      - key: SUPER_ADMIN_OTP_MOBILE
+        value: "+917250227201"
+      - key: SMS_PROVIDER
+        value: console    # set to fast2sms / msg91 / twilio and add SMS_API_KEY (and template) in the dashboard
       - key: SEED_DEMO_DATA
         value: "true"     # loads demo logins on first start; set to "false" for a real launch

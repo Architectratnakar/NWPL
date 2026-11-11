@@ -7,8 +7,17 @@ const inr = (v: unknown) => '₹' + Number(v).toLocaleString('en-IN', { minimumF
 export async function renderInvoice(orderId: string) {
   const o = await prisma.order.findUniqueOrThrow({
     where: { id: orderId },
-    include: { items: { include: { product: true } }, member: { include: { user: true } } },
+    include: {
+      items: { include: { product: true } },
+      member: { include: { user: true } },
+      franchise: { select: { code: true, name: true, gstin: true, address: true } },
+      payments: { where: { status: 'SUCCESS' }, select: { gateway: true } },
+    },
   });
+  const fAddr = (o.franchise?.address ?? {}) as Record<string, string>;
+  const soldAt = o.franchise
+    ? `<p><b>Sold at franchise:</b> ${esc(o.franchise.name)} (${esc(o.franchise.code)})${o.franchise.gstin ? ` · GSTIN ${esc(o.franchise.gstin)}` : ''}${fAddr.city ? ` · ${esc([fAddr.line1, fAddr.city, fAddr.state].filter(Boolean).join(', '))}` : ''} · Paid by ${esc((o.payments[0]?.gateway ?? '').replace('FRANCHISE_', '').toLowerCase())}</p>`
+    : '';
   const pkg = o.packageId ? await prisma.package.findUnique({ where: { id: o.packageId } }) : null;
   const rows = pkg
     ? `<tr><td>1</td><td>${esc(pkg.name)}<div class="muted">Includes: ${o.items.map((i) => `${esc(i.product.name)} × ${i.qty}`).join(', ') || 'products as per package'}</div></td><td>—</td><td>1</td><td>${inr(o.grandTotal)}</td><td>${esc(o.bvTotal)}</td><td>${inr(o.grandTotal)}</td></tr>`
@@ -26,7 +35,7 @@ th,td{border:1px solid #d1d5db;padding:8px;text-align:left}th{background:#ecfdf5
 <body><button onclick="window.print()" style="float:right;padding:8px 14px">Print / Save PDF</button>
 <div class="top"><div><h1>Navarth Wellness Pvt. Ltd.</h1><div class="muted">Jiyo Zindagi Shaan Se · GSTIN: <b>TO-BE-FILLED</b> · Registered office: TO BE FILLED</div></div>
 <div><h2 style="margin:0">TAX INVOICE</h2><div>No: <b>${esc(o.invoiceNo)}</b></div><div>Date: ${o.paidAt?.toLocaleDateString('en-IN')}</div><div>Order: ${esc(o.orderNo)}</div></div></div>
-<p><b>Bill to:</b> ${esc(o.member?.fullName)} (${esc(o.member?.distributorCode)}) · ${esc(o.member?.user.mobile)}</p>
+<p><b>Bill to:</b> ${esc(o.member?.fullName)} (${esc(o.member?.distributorCode)}) · ${esc(o.member?.user.mobile)}</p>${soldAt}
 <table><thead><tr><th>#</th><th>Item</th><th>HSN</th><th>Qty</th><th>Rate (incl. GST)</th><th>BV</th><th>Amount</th></tr></thead><tbody>${rows}</tbody></table>
 <table class="tot" style="width:320px;margin-left:auto"><tr><td>Taxable value</td><td class="right">${inr(o.subTotal)}</td></tr>
 <tr><td>CGST</td><td class="right">${inr(half)}</td></tr><tr><td>SGST</td><td class="right">${inr(half)}</td></tr>

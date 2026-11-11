@@ -5,6 +5,7 @@ import { getSettings } from '../lib/settings';
 import { creditWallet } from '../services/wallet';
 import { propagatePending } from './bv';
 import { capRemaining, matchPairs, type Carry } from './pair';
+import { autopoolClosingLines } from './autopool';
 
 const D = (v: Prisma.Decimal.Value) => new Prisma.Decimal(v);
 
@@ -113,6 +114,9 @@ export async function runClosing(periodStart: Date, periodEnd: Date, runBy: stri
       }
     }
 
+    // ---- 3. autopool (only when switched on in plan settings) ----
+    if (s.features.autopool) lines.push(...(await autopoolClosingLines(closing.id, periodEnd, s.autopool)));
+
     if (lines.length) await prisma.closingLine.createMany({ data: lines });
 
     const turnover = await prisma.order.aggregate({
@@ -182,6 +186,12 @@ export async function postClosing(id: string) {
           });
           const mem = await tx.member.findUniqueOrThrow({ where: { id: l.memberId }, select: { currentRankId: true } });
           if ((mem.currentRankId ?? 0) < rankId) await tx.member.update({ where: { id: l.memberId }, data: { currentRankId: rankId } });
+        }
+        if (l.incomeType === 'AUTOPOOL') {
+          // unique (entryId, level) → the same level can never be paid twice, even by two closings
+          await tx.autopoolPayout.create({
+            data: { entryId: String(d.entryId), memberId: l.memberId, level: Number(d.level), amount: l.amount, closingLineId: l.id },
+          });
         }
         await creditWallet(tx, l.memberId, l.amount, 'CLOSING_LINE', l.id, l.incomeType as IncomeType, `Closing ${periodKeys(c.periodStart).dayKey}`);
       }

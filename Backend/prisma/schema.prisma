@@ -116,6 +116,23 @@ enum PendingActionStatus {
   APPROVED
   REJECTED
 }
+enum FranchiseStatus {
+  ACTIVE
+  SUSPENDED
+  CLOSED
+}
+enum FranchiseStockTxnType {
+  ALLOT        // company → franchise
+  TAKE_BACK    // franchise → company
+  SALE         // franchise → member (order)
+  RETURN       // member → franchise (approved return)
+  ADJUST       // manual correction
+}
+enum FranchiseCommissionStatus {
+  PENDING
+  PAID
+  CANCELLED
+}
 
 // ---------- USERS & MEMBERS ----------
 model User {
@@ -129,6 +146,7 @@ model User {
   lastLoginAt  DateTime?
   createdAt    DateTime  @default(now())
   member       Member?
+  franchise    Franchise?
   refreshTokens RefreshToken[]
 }
 
@@ -143,15 +161,17 @@ model RefreshToken {
 }
 
 model OtpCode {
-  id        String    @id @default(cuid())
+  id        String    @id @default(cuid())   // for ADMIN_LOGIN this is a random challenge id
   mobile    String
-  purpose   String
+  purpose   String                          // ADMIN_LOGIN
+  userId    String?                         // login the OTP belongs to
   codeHash  String
   attempts  Int       @default(0)
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime  @default(now())
   @@index([mobile, purpose])
+  @@index([userId, createdAt])
 }
 
 model Member {
@@ -196,6 +216,8 @@ model Member {
   closingLines     ClosingLine[]
   tickets          Ticket[]
   bvPostings       BvPosting[]
+  autopoolEntry    AutopoolEntry?
+  franchisesOwned  Franchise[]
 
   @@unique([parentId, side])                         // one member per slot
   @@index([sponsorId])
@@ -273,6 +295,8 @@ model Product {
   stock       Int            @default(0)
   packageItems PackageItem[]
   orderItems  OrderItem[]
+  franchiseStock FranchiseStock[]
+  franchiseStockTxns FranchiseStockTxn[]
 }
 
 model ProductPrice {                       // versioned prices
@@ -324,7 +348,8 @@ model Order {
   grandTotal   Decimal     @db.Decimal(12, 2)
   bvTotal      Decimal     @db.Decimal(12, 2)
   shipping     Json?
-  franchiseId  String?
+  franchiseId  String?                    // set when the order was sold at a franchise counter
+  franchise    Franchise?  @relation(fields: [franchiseId], references: [id])
   invoiceNo    String?     @unique
   invoiceUrl   String?
   createdAt    DateTime    @default(now())
@@ -334,8 +359,10 @@ model Order {
   bvPostings   BvPosting[]
   returns      ReturnRequest[]
   package      Package?    @relation(fields: [packageId], references: [id])
+  franchiseCommission FranchiseCommission?
   @@index([memberId, createdAt])
   @@index([status, paidAt])
+  @@index([franchiseId, createdAt])
 }
 
 model OrderItem {
@@ -529,6 +556,106 @@ model PendingAction {                     // maker-checker queue
   createdAt   DateTime            @default(now())
   decidedAt   DateTime?
   @@index([status])
+}
+
+// ---------- AUTOPOOL (global 4 × 4 matrix, filled in joining order) ----------
+// Position p has its 4 children at 4(p-1)+2 … 4(p-1)+5, so a level is complete
+// when enough positions exist — no tree walk needed (see src/engine/autopool.ts).
+model AutopoolEntry {
+  id        String           @id @default(cuid())
+  position  Int              @unique          // 1, 2, 3 … (never reused)
+  memberId  String           @unique
+  member    Member           @relation(fields: [memberId], references: [id])
+  source    String           @default("ACTIVATION")   // ACTIVATION | ADMIN_SYNC | ADMIN_MANUAL
+  enteredAt DateTime         @default(now())
+  payouts   AutopoolPayout[]
+}
+
+model AutopoolPayout {                     // one row per level paid (created when the closing is POSTED)
+  id            String        @id @default(cuid())
+  entryId       String
+  entry         AutopoolEntry @relation(fields: [entryId], references: [id])
+  memberId      String
+  level         Int
+  amount        Decimal       @db.Decimal(14, 2)
+  closingLineId String        @unique
+  paidAt        DateTime      @default(now())
+  @@unique([entryId, level])                 // a level can never be paid twice
+  @@index([memberId])
+}
+
+// ---------- FRANCHISE ----------
+model Franchise {
+  id                String          @id @default(cuid())
+  code              String          @unique              // FR0001
+  name              String                               // outlet / shop name
+  type              String          @default("MINI")     // MINI | DISTRICT | STATE | MASTER
+  userId            String          @unique              // login (role FRANCHISE)
+  user              User            @relation(fields: [userId], references: [id])
+  ownerMemberId     String?                              // partner's distributor ID (if a distributor)
+  ownerMember       Member?         @relation(fields: [ownerMemberId], references: [id])
+  ownerName         String
+  mobile            String
+  email             String?
+  gstin             String?
+  address           Json?
+  territory         String?
+  commissionPercent Decimal         @default(5) @db.Decimal(5, 2)
+  securityDeposit   Decimal?        @db.Decimal(12, 2)
+  agreementStart    DateTime?
+  agreementEnd      DateTime?
+  status            FranchiseStatus @default(ACTIVE)
+  createdBy         String
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  stock             FranchiseStock[]
+  stockTxns         FranchiseStockTxn[]
+  commissions       FranchiseCommission[]
+  orders            Order[]
+  @@index([status])
+}
+
+model FranchiseStock {
+  franchiseId String
+  franchise   Franchise @relation(fields: [franchiseId], references: [id])
+  productId   Int
+  product     Product   @relation(fields: [productId], references: [id])
+  qty         Int       @default(0)
+  updatedAt   DateTime  @updatedAt
+  @@id([franchiseId, productId])
+}
+
+model FranchiseStockTxn {                  // append-only stock ledger per franchise
+  id          String                @id @default(cuid())
+  franchiseId String
+  franchise   Franchise             @relation(fields: [franchiseId], references: [id])
+  productId   Int
+  product     Product               @relation(fields: [productId], references: [id])
+  type        FranchiseStockTxnType
+  qty         Int                                   // + into franchise stock, − out of it
+  balanceAfter Int
+  refId       String?                               // order id for SALE / RETURN
+  note        String?
+  createdBy   String
+  createdAt   DateTime              @default(now())
+  @@index([franchiseId, createdAt])
+}
+
+model FranchiseCommission {
+  id          String                    @id @default(cuid())
+  franchiseId String
+  franchise   Franchise                 @relation(fields: [franchiseId], references: [id])
+  orderId     String                    @unique
+  order       Order                     @relation(fields: [orderId], references: [id])
+  saleAmount  Decimal                   @db.Decimal(12, 2)   // taxable value of the order
+  percent     Decimal                   @db.Decimal(5, 2)
+  amount      Decimal                   @db.Decimal(12, 2)
+  status      FranchiseCommissionStatus @default(PENDING)
+  utr         String?
+  paidBy      String?
+  paidAt      DateTime?
+  createdAt   DateTime                  @default(now())
+  @@index([franchiseId, status])
 }
 
 model Counter {                           // atomic number generators (distributor code, order no, invoice no)

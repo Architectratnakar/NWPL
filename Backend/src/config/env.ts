@@ -56,6 +56,25 @@ const schema = z.object({
     .string()
     .default('true')
     .transform((v) => v === 'true'),
+
+  // ---- Super Admin login OTP ----
+  SUPER_ADMIN_OTP: z
+    .string()
+    .default('true')
+    .transform((v) => v !== 'false'),
+  /** Where the Super Admin OTP is sent. Empty = the Super Admin's own registered mobile. */
+  SUPER_ADMIN_OTP_MOBILE: z.string().trim().default(''),
+  OTP_EXPIRY_MINUTES: z.coerce.number().int().min(1).max(30).default(5),
+
+  // ---- SMS gateway ----
+  /** console = OTP is printed in the server log (development). fast2sms / msg91 / twilio send a real SMS. */
+  SMS_PROVIDER: z.enum(['console', 'fast2sms', 'msg91', 'twilio']).default('console'),
+  SMS_API_KEY: z.string().default(''),          // Fast2SMS API key / MSG91 authkey
+  SMS_SENDER_ID: z.string().default(''),        // DLT sender id (Fast2SMS DLT route)
+  SMS_TEMPLATE_ID: z.string().default(''),      // DLT template / MSG91 OTP template id
+  TWILIO_ACCOUNT_SID: z.string().default(''),
+  TWILIO_AUTH_TOKEN: z.string().default(''),
+  TWILIO_FROM: z.string().default(''),
 });
 
 const parsed = schema.safeParse(process.env);

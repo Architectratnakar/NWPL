@@ -1,6 +1,6 @@
 import { lazy, Suspense, type ReactNode } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
-import { useAuth } from '@/auth/AuthContext';
+import { homeFor, useAuth } from '@/auth/AuthContext';
 import AppLayout from '@/components/Layout';
 import { PageLoader } from '@/components/ui';
 import Login from '@/pages/auth/Login';
@@ -21,6 +21,7 @@ const Kyc = lazy(() => import('@/pages/member/Kyc'));
 const Profile = lazy(() => import('@/pages/member/Profile'));
 const Support = lazy(() => import('@/pages/member/Support'));
 const Plan = lazy(() => import('@/pages/member/Plan'));
+const MemberAutopool = lazy(() => import('@/pages/member/Autopool'));
 // admin area
 const AdminDashboard = lazy(() => import('@/pages/admin/Dashboard'));
 const MembersList = lazy(() => import('@/pages/admin/Members').then((m) => ({ default: m.MembersList })));
@@ -40,13 +41,23 @@ const Settings = lazy(() => import('@/pages/admin/System').then((m) => ({ defaul
 const AdminTickets = lazy(() => import('@/pages/admin/System').then((m) => ({ default: m.AdminTickets })));
 const Audit = lazy(() => import('@/pages/admin/System').then((m) => ({ default: m.Audit })));
 const AdminIncome = lazy(() => import('@/pages/admin/Income'));
+const AdminAutopool = lazy(() => import('@/pages/admin/Autopool'));
+const FranchiseList = lazy(() => import('@/pages/admin/Franchises').then((m) => ({ default: m.FranchiseList })));
+const FranchiseDetail = lazy(() => import('@/pages/admin/Franchises').then((m) => ({ default: m.FranchiseDetail })));
+// franchise counter
+const FranchiseDashboard = lazy(() => import('@/pages/franchise/Panel').then((m) => ({ default: m.FranchiseDashboard })));
+const FranchiseNewSale = lazy(() => import('@/pages/franchise/Panel').then((m) => ({ default: m.NewSale })));
+const FranchiseStock = lazy(() => import('@/pages/franchise/Panel').then((m) => ({ default: m.FranchiseStock })));
+const FranchiseSales = lazy(() => import('@/pages/franchise/Panel').then((m) => ({ default: m.FranchiseSales })));
+const FranchiseCommission = lazy(() => import('@/pages/franchise/Panel').then((m) => ({ default: m.FranchiseCommission })));
 
-function Guard({ area, children }: { area: 'member' | 'admin'; children: ReactNode }) {
+function Guard({ area, children }: { area: 'member' | 'admin' | 'franchise'; children: ReactNode }) {
   const { user, loading, isStaff } = useAuth();
   if (loading) return <div className="grid min-h-screen place-items-center"><PageLoader /></div>;
   if (!user) return <Navigate to="/login" replace />;
-  if (area === 'admin' && !isStaff) return <Navigate to="/app" replace />;
-  if (area === 'member' && isStaff) return <Navigate to="/admin" replace />;
+  if (area === 'admin' && !isStaff) return <Navigate to={homeFor(user)} replace />;
+  if (area === 'member' && (isStaff || !user.memberId)) return <Navigate to={homeFor(user)} replace />;
+  if (area === 'franchise' && user.role !== 'FRANCHISE') return <Navigate to={homeFor(user)} replace />;
   return <>{children}</>;
 }
 
@@ -57,9 +68,9 @@ function SuperOnly({ children }: { children: ReactNode }) {
 }
 
 function Home() {
-  const { user, loading, isStaff } = useAuth();
+  const { user, loading } = useAuth();
   if (loading) return <div className="grid min-h-screen place-items-center"><PageLoader /></div>;
-  return <Navigate to={!user ? '/login' : isStaff ? '/admin' : '/app'} replace />;
+  return <Navigate to={!user ? '/login' : homeFor(user)} replace />;
 }
 
 const S = ({ children }: { children: ReactNode }) => <Suspense fallback={<PageLoader />}>{children}</Suspense>;
@@ -86,6 +97,15 @@ export default function App() {
         <Route path="profile" element={<S><Profile /></S>} />
         <Route path="support" element={<S><Support /></S>} />
         <Route path="plan" element={<S><Plan /></S>} />
+        <Route path="autopool" element={<S><MemberAutopool /></S>} />
+      </Route>
+
+      <Route path="/franchise" element={<Guard area="franchise"><AppLayout area="franchise" /></Guard>}>
+        <Route index element={<S><FranchiseDashboard /></S>} />
+        <Route path="sale" element={<S><FranchiseNewSale /></S>} />
+        <Route path="stock" element={<S><FranchiseStock /></S>} />
+        <Route path="sales" element={<S><FranchiseSales /></S>} />
+        <Route path="commission" element={<S><FranchiseCommission /></S>} />
       </Route>
 
       <Route path="/admin" element={<Guard area="admin"><AppLayout area="admin" /></Guard>}>
@@ -102,6 +122,9 @@ export default function App() {
         <Route path="closings" element={<S><Closings /></S>} />
         <Route path="closings/:id" element={<S><ClosingDetail /></S>} />
         <Route path="income" element={<SuperOnly><S><AdminIncome /></S></SuperOnly>} />
+        <Route path="autopool" element={<SuperOnly><S><AdminAutopool /></S></SuperOnly>} />
+        <Route path="franchises" element={<S><FranchiseList /></S>} />
+        <Route path="franchises/:id" element={<S><FranchiseDetail /></S>} />
         <Route path="withdrawals" element={<S><Withdrawals /></S>} />
         <Route path="ranks" element={<S><RanksAdmin /></S>} />
         <Route path="reports" element={<S><Reports /></S>} />

@@ -5,7 +5,7 @@ import { ArrowLeft, Award, CheckCheck, ClipboardList, Download, FileText, HandCo
 import { del, get, openAuthed, patch, post, put } from '@/api/client';
 import { useAuth } from '@/auth/AuthContext';
 import { Badge, Button, Callout, Card, DataTable, Field, Input, Modal, PageHeader, PageLoader, Pagination, Select, StatCard, Tabs } from '@/components/ui';
-import { bv, compactInr, date, dateTime, inr, num, titleCase } from '@/lib/format';
+import { bv, compactInr, date, dateTime, incomeNote, inr, num, titleCase } from '@/lib/format';
 import { useAction } from '@/lib/hooks';
 
 /* ============ CLOSINGS ============ */
@@ -80,7 +80,7 @@ export function ClosingDetail() {
         <DataTable rows={data.lines.items} onRowClick={setLine} empty="No income in this period" columns={[
           { key: 'member', header: 'Distributor', render: (r: any) => <div><p className="font-semibold">{r.member.fullName}</p><p className="text-xs text-brand-700">{r.member.distributorCode} · {r.member.packageTier === 'FULL' ? '100 BV' : '40 BV'}</p></div> },
           { key: 'type', header: 'Type', render: (r: any) => <Badge>{titleCase(r.incomeType)}</Badge> },
-          { key: 'pairs', header: 'Pairs', align: 'right', render: (r: any) => (r.incomeType === 'PAIR_MATCHING' ? r.pairs : r.detail.rankName) },
+          { key: 'pairs', header: 'Pairs', align: 'right', render: (r: any) => (r.incomeType === 'PAIR_MATCHING' ? r.pairs : incomeNote(r)) },
           { key: 'flushed', header: 'Flushed', align: 'right', render: (r: any) => r.flushed || '—' },
           { key: 'amount', header: 'Amount', align: 'right', render: (r: any) => <b>{inr(r.amount)}</b> },
         ]} />

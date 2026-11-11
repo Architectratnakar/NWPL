@@ -14,6 +14,8 @@ const dict = {
     reports: 'Reports', returns: 'Returns', audit: 'Audit Log', tickets: 'Support Tickets', kycQueue: 'KYC Review', rewards: 'Ranks & Rewards',
     network: 'Network', commerce: 'Commerce', earnings: 'Earnings', account: 'Account', admin: 'Administration', finance: 'Finance', system: 'System',
     adminOrders: 'Orders', distIncome: 'Distributor Income',
+    autopool: 'Autopool', franchise: 'Franchise', franchises: 'Franchises', franchisePanel: 'Franchise Panel', franchiseCounter: 'Franchise counter',
+    newSale: 'New Sale', sales: 'Sales', myStock: 'My Stock', commission: 'Commission', myDistributorAccount: 'My Distributor Account',
   },
   hi: {
     tagline: 'जियो ज़िंदगी शान से', welcome: 'फिर से स्वागत है', loginSub: 'अपने डिस्ट्रीब्यूटर या एडमिन खाते में लॉग इन करें',
@@ -26,6 +28,8 @@ const dict = {
     reports: 'रिपोर्ट', returns: 'वापसी', audit: 'ऑडिट लॉग', tickets: 'सहायता टिकट', kycQueue: 'केवाईसी जांच', rewards: 'रैंक और रिवॉर्ड',
     network: 'नेटवर्क', commerce: 'कॉमर्स', earnings: 'कमाई', account: 'खाता', admin: 'प्रशासन', finance: 'वित्त', system: 'सिस्टम',
     adminOrders: 'ऑर्डर', distIncome: 'डिस्ट्रीब्यूटर आय',
+    autopool: 'आटोपुल', franchise: 'फ्रेंचाइज़ी', franchises: 'फ्रेंचाइज़ी', franchisePanel: 'फ्रेंचाइज़ी पैनल', franchiseCounter: 'फ्रेंचाइज़ी काउंटर',
+    newSale: 'नई बिक्री', sales: 'बिक्री', myStock: 'मेरा स्टॉक', commission: 'कमीशन', myDistributorAccount: 'मेरा डिस्ट्रीब्यूटर खाता',
   },
 } as const;
 

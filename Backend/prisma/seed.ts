@@ -247,11 +247,33 @@ async function main() {
     { by: 'MEMBER', name: 'Ramesh Kumar', text: 'I placed an order yesterday. Please share the courier tracking number.', at: new Date().toISOString() },
   ] } });
 
+  console.log('🔁 Autopool positions (feature stays OFF until legal review)…');
+  const { syncActiveMembers } = await import('../src/engine/autopool');
+  const pool = await syncActiveMembers();
+
+  console.log('🏪 Demo franchise…');
+  const { nextFranchiseCode, transferStock } = await import('../src/services/franchise');
+  const sunita = await prisma.member.findFirstOrThrow({ where: { distributorCode: 'NW100002' }, include: { user: true } });
+  await prisma.user.update({ where: { id: sunita.userId }, data: { role: 'FRANCHISE' } });
+  const fr = await prisma.franchise.create({
+    data: {
+      code: await nextFranchiseCode(prisma), name: 'Navarth Wellness Store – Indore', type: 'DISTRICT', userId: sunita.userId, ownerMemberId: sunita.id,
+      ownerName: sunita.fullName, mobile: sunita.user.mobile, territory: 'Indore district', commissionPercent: 8, securityDeposit: 50000,
+      address: { line1: '45, AB Road', city: 'Indore', state: 'Madhya Pradesh', pincode: '452010' }, agreementStart: new Date(), createdBy: ids.ADMIN_OPS,
+    },
+  });
+  await transferStock(fr.id, ['NW-001', 'NW-007', 'NW-008', 'NW-011', 'NW-012', 'NW-013', 'NW-014', 'NW-024'].map((sku) => ({ productId: bySku[sku], qty: 20 })), 'ALLOT', ids.ADMIN_OPS, 'Opening stock');
+  const frSale = await createOrder({ memberId: ramesh.id, type: 'REPURCHASE', items: [{ productId: bySku['NW-013'], qty: 1 }, { productId: bySku['NW-024'], qty: 1 }], franchiseId: fr.id });
+  await markOrderPaid(frSale.id, 'FRANCHISE_CASH', `${fr.code}-${frSale.id}`, sunita.userId);
+
   const r = await prisma.member.findUniqueOrThrow({ where: { id: ramesh.id }, include: { wallet: true, volume: true, currentRank: true } });
   console.log('\n✅ Seed complete');
   console.log(`   Members: ${await prisma.member.count()}   Closings: ${await prisma.closing.count()}`);
   console.log(`   Demo distributor ${r.distributorCode}: wallet ₹${r.wallet?.balance}, left BV ${r.volume?.totalLeftBv}, right BV ${r.volume?.totalRightBv}, rank ${r.currentRank?.name ?? '-'}`);
   console.log(`   Not-yet-activated ID: ${fresh.distributorCode} / Demo@123`);
+  console.log(`   Autopool: ${pool.total} positions (switch it on in Admin → Autopool → Settings)`);
+  console.log(`   Franchise ${fr.code}: log in as NW100002 / Demo@123 (Sunita Devi)`);
+  console.log('   Super Admin login needs an OTP — with SMS_PROVIDER=console it is shown on screen and in the server log');
 }
 
 main()

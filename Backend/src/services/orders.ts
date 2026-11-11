@@ -4,6 +4,8 @@ import { badRequest, notFound } from '../lib/http';
 import { nextInvoiceNo, nextOrderNo } from '../lib/counters';
 import { propagatePosting } from '../engine/bv';
 import { getSettings } from '../lib/settings';
+import { enterAutopool } from '../engine/autopool';
+import { createFranchiseCommission, franchiseReturnStockIn, franchiseSaleStockOut } from './franchise';
 
 const D = (v: Prisma.Decimal.Value) => new Prisma.Decimal(v);
 
@@ -39,6 +41,8 @@ export interface CreateOrderInput {
   packageCode?: string;
   items?: { productId: number; qty: number }[];
   shipping?: Record<string, string>;
+  /** set when the order is sold at a franchise counter (stock comes from the franchise) */
+  franchiseId?: string | null;
 }
 
 export async function createOrder(input: CreateOrderInput) {
@@ -62,7 +66,11 @@ export async function createOrder(input: CreateOrderInput) {
       if (member.packageTier !== 'BASIC') throw badRequest('Only 40 BV IDs can upgrade');
     }
     const pending = await prisma.order.findFirst({ where: { memberId: member.id, type: input.type, status: 'PENDING_PAYMENT' } });
-    if (pending) return pending; // reuse the unpaid order
+    if (pending) {
+      // reuse the unpaid order for the SAME package; a different package replaces it
+      if (pending.packageId === pkg.id && (pending.franchiseId ?? null) === (input.franchiseId ?? null)) return pending;
+      await prisma.order.update({ where: { id: pending.id }, data: { status: 'CANCELLED' } });
+    }
     packageId = pkg.id;
     const pp = await packagePrice(pkg);
     if (pp.price.lte(0)) throw badRequest('This package has no price yet. Please contact the company.');
@@ -99,6 +107,7 @@ export async function createOrder(input: CreateOrderInput) {
         grandTotal: grand,
         bvTotal: bv,
         shipping: input.shipping ?? undefined,
+        franchiseId: input.franchiseId ?? null,
         items: { create: lines },
       },
       include: { items: true },
@@ -110,7 +119,8 @@ export async function createOrder(input: CreateOrderInput) {
  * Called when the payment gateway confirms payment (here: the DEMO gateway).
  * Idempotent: paying an already-paid order does nothing.
  */
-export async function markOrderPaid(orderId: string, gateway = 'DEMO', gatewayRef?: string) {
+export async function markOrderPaid(orderId: string, gateway = 'DEMO', gatewayRef?: string, actorId = 'system') {
+  const { values: s } = await getSettings();
   const posting = await prisma.$transaction(async (tx) => {
     const order = await tx.order.findUnique({ where: { id: orderId } });
     if (!order) throw notFound('Order');
@@ -132,10 +142,17 @@ export async function markOrderPaid(orderId: string, gateway = 'DEMO', gatewayRe
           ? { status: 'ACTIVE', packageTier: pkg.tier, activatedAt: new Date() }
           : { packageTier: pkg.tier, upgradedAt: new Date() },
       });
+      // non-working autopool: a newly activated ID takes the next free position
+      if (order.type === 'JOINING' && s.features.autopool && s.autopool.autoEnterOnActivation) await enterAutopool(tx, member.id, 'ACTIVATION');
     }
-    // stock out
+    // stock out — from the franchise counter's stock, or from company stock
     const items = await tx.orderItem.findMany({ where: { orderId } });
-    for (const it of items) await tx.product.update({ where: { id: it.productId }, data: { stock: { decrement: it.qty } } });
+    if (order.franchiseId) {
+      await franchiseSaleStockOut(tx, { id: order.id, franchiseId: order.franchiseId, orderNo: order.orderNo }, items, actorId);
+      await createFranchiseCommission(tx, { id: order.id, franchiseId: order.franchiseId, subTotal: order.subTotal });
+    } else {
+      for (const it of items) await tx.product.update({ where: { id: it.productId }, data: { stock: { decrement: it.qty } } });
+    }
 
     if (order.bvTotal.gt(0) || pairUnits) {
       return tx.bvPosting.create({ data: { memberId: member.id, orderId, bv: order.bvTotal, pairUnits, tier: order.type === 'UPGRADE' ? 'NONE' : tier } });
@@ -148,7 +165,7 @@ export async function markOrderPaid(orderId: string, gateway = 'DEMO', gatewayRe
 }
 
 /** Approve a return: refund, reverse BV (and the joining unit), deactivate if it was the joining order. */
-export async function approveReturn(returnId: string) {
+export async function approveReturn(returnId: string, actorId = 'system') {
   const posting = await prisma.$transaction(async (tx) => {
     const rr = await tx.returnRequest.findUnique({ where: { id: returnId }, include: { order: true } });
     if (!rr) throw notFound('Return request');
@@ -158,7 +175,8 @@ export async function approveReturn(returnId: string) {
     await tx.order.update({ where: { id: order.id }, data: { status: 'RETURNED' } });
     await tx.payment.updateMany({ where: { orderId: order.id, status: 'SUCCESS' }, data: { status: 'REFUNDED' } });
     const items = await tx.orderItem.findMany({ where: { orderId: order.id } });
-    for (const it of items) await tx.product.update({ where: { id: it.productId }, data: { stock: { increment: it.qty } } });
+    if (order.franchiseId) await franchiseReturnStockIn(tx, { id: order.id, franchiseId: order.franchiseId, orderNo: order.orderNo }, items, actorId);
+    else for (const it of items) await tx.product.update({ where: { id: it.productId }, data: { stock: { increment: it.qty } } });
 
     const original = await tx.bvPosting.findFirst({ where: { orderId: order.id, reversalOf: null } });
     if (order.type === 'JOINING') {

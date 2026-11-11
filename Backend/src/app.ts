@@ -26,6 +26,8 @@ import * as adminCore from './modules/admin/core';
 import * as adminCommerce from './modules/admin/commerce';
 import * as adminMoney from './modules/admin/money';
 import * as adminIncome from './modules/admin/income';
+import * as autopool from './modules/autopool';
+import * as franchise from './modules/franchise';
 
 export function createApp() {
   const app = express();
@@ -39,6 +41,8 @@ export function createApp() {
   const api = express.Router();
   api.use(authenticate);
   api.use('/auth/login', rateLimit({ windowMs: 15 * 60_000, limit: 50, standardHeaders: true, legacyHeaders: false }));
+  // Super Admin OTP: a 6-digit code must not be guessable by brute force (also capped at 5 tries per OTP)
+  api.use(['/auth/login/verify-otp', '/auth/login/resend-otp'], rateLimit({ windowMs: 15 * 60_000, limit: 20, standardHeaders: true, legacyHeaders: false }));
   api.get('/health', async (_req, res) => {
     const db = await checkDatabase();
     res.status(db.ok ? 200 : 503).json({ data: { ok: db.ok, database: db.status, fix: db.fix ?? null, time: new Date().toISOString() } });
@@ -50,6 +54,8 @@ export function createApp() {
     adminCommerce.products, adminCommerce.packages, adminCommerce.ranks, adminCommerce.orders, adminCommerce.returns,
     adminMoney.closings, adminMoney.withdrawals, adminMoney.settings, adminMoney.reports, adminMoney.tickets,
     adminIncome.income,
+    autopool.admin, autopool.member,
+    franchise.admin, franchise.panel,
   ];
   for (const m of modules) api.use(m.base, m.router);
   api.use((_req, res) => res.status(404).json({ error: { code: 'NOT_FOUND', message: 'API route not found' } }));
