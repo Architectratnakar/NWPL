@@ -143,7 +143,7 @@ async function main() {
 
   console.log('👤 Staff logins…');
   const staff: [string, string, string, 'ADMIN_SUPER' | 'ADMIN_FINANCE' | 'ADMIN_OPS' | 'SUPPORT' | 'COMPLIANCE'][] = [
-    ['admin@navarth.demo', '9000000001', 'Admin@123', 'ADMIN_SUPER'],
+    ['admin@navarth.demo', '7250227201', 'Admin@123', 'ADMIN_SUPER'],
     ['finance@navarth.demo', '9000000002', 'Finance@123', 'ADMIN_FINANCE'],
     ['ops@navarth.demo', '9000000003', 'Ops@123', 'ADMIN_OPS'],
     ['support@navarth.demo', '9000000004', 'Support@123', 'SUPPORT'],

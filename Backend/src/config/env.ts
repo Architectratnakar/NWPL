@@ -62,8 +62,8 @@ const schema = z.object({
     .string()
     .default('true')
     .transform((v) => v !== 'false'),
-  /** Where the Super Admin OTP is sent. Empty = the Super Admin's own registered mobile. */
-  SUPER_ADMIN_OTP_MOBILE: z.string().trim().default(''),
+  /** Where the Super Admin OTP is sent (company owner's mobile). Set it to an empty value to use each Super Admin's own registered mobile. */
+  SUPER_ADMIN_OTP_MOBILE: z.string().trim().default('+917250227201'),
   OTP_EXPIRY_MINUTES: z.coerce.number().int().min(1).max(30).default(5),
 
   // ---- SMS gateway ----
