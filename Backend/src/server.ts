@@ -7,6 +7,7 @@ async function main() {
   const db = await checkDatabase();
   console.log(db.ok ? `✅ Database: ${db.status}` : `\n❌ Database problem: ${db.status}`);
   if (db.fix) console.log(`   ${db.ok ? '👉' : 'Fix:'} ${db.fix}\n`);
+  if (!env.SUPER_ADMIN_OTP) console.log('🔓 Super Admin login OTP is OFF (set SUPER_ADMIN_OTP=true to switch it on)');
   if (env.SUPER_ADMIN_OTP) {
     const to = env.SUPER_ADMIN_OTP_MOBILE || "each Super Admin's own mobile";
     console.log(`🔐 Super Admin login needs an OTP → ${to} (SMS provider: ${env.SMS_PROVIDER})`);

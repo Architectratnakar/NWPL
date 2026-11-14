@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Eye, EyeOff, KeyRound, LogIn, MessageSquareLock, RotateCw, ShieldCheck, UserRound } from 'lucide-react';
 import { homeFor, useAuth, type OtpChallenge } from '@/auth/AuthContext';
 import { errMsg } from '@/api/client';
@@ -10,7 +10,7 @@ import AuthShell from './AuthShell';
 export const DEMO_LOGINS = [
   { label: 'Distributor', who: 'Ramesh Kumar · NW100001', login: 'NW100001', password: 'Demo@123', tone: 'bg-brand-50 text-brand-800 ring-brand-200' },
   { label: 'New member', who: 'Not yet activated · mobile 9123456789', login: '9123456789', password: 'Demo@123', tone: 'bg-sky-50 text-sky-800 ring-sky-200' },
-  { label: 'Super Admin (OTP)', who: 'admin@navarth.demo', login: 'admin@navarth.demo', password: 'Admin@123', tone: 'bg-violet-50 text-violet-800 ring-violet-200' },
+  { label: 'Super Admin', who: 'admin@navarth.demo', login: 'admin@navarth.demo', password: 'Admin@123', tone: 'bg-violet-50 text-violet-800 ring-violet-200' },
   { label: 'Franchise', who: 'Sunita Devi · NW100002 · FR0001', login: 'NW100002', password: 'Demo@123', tone: 'bg-emerald-50 text-emerald-800 ring-emerald-200' },
   { label: 'Finance', who: 'finance@navarth.demo', login: 'finance@navarth.demo', password: 'Finance@123', tone: 'bg-gold-50 text-gold-700 ring-gold-100' },
   { label: 'Operations', who: 'ops@navarth.demo', login: 'ops@navarth.demo', password: 'Ops@123', tone: 'bg-slate-50 text-slate-700 ring-slate-200' },
@@ -111,7 +111,9 @@ export default function Login() {
   const { login } = useAuth();
   const { t } = useT();
   const nav = useNavigate();
-  const [form, setForm] = useState({ login: '', password: '' });
+  const location = useLocation();
+  // coming from the registration popup → the new User ID is already filled in
+  const [form, setForm] = useState({ login: (location.state as { login?: string } | null)?.login ?? '', password: '' });
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

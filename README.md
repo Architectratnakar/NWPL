@@ -91,7 +91,7 @@ The login page has these as one-click buttons.
 |---|---|---|---|
 | **Distributor** (Ramesh Kumar) | `NW100001` | `Demo@123` | Dashboard, genealogy tree, income, wallet & withdraw, shop, KYC |
 | **New member** (not activated) | `9123456789` (mobile) | `Demo@123` | Activate with a 40 BV / 100 BV package (demo payment) |
-| **Super Admin** | `admin@navarth.demo` | `Admin@123` + **OTP** | Everything, incl. staff users, plan settings and **Autopool**. The OTP goes by SMS to `SUPER_ADMIN_OTP_MOBILE`; in development (`SMS_PROVIDER=console`) it is shown on screen and in the Backend terminal |
+| **Super Admin** | `admin@navarth.demo` | `Admin@123` | Everything, incl. staff users, plan settings and **Autopool**. (Login OTP is currently off; see below) |
 | **Franchise** (Sunita Devi, FR0001) | `NW100002` | `Demo@123` | Franchise panel: new sale at the counter, stock, sales, commission — plus her own distributor area |
 | **Finance** | `finance@navarth.demo` | `Finance@123` | Approve & post closings, process withdrawals |
 | **Operations** | `ops@navarth.demo` | `Ops@123` | Distributors, KYC, orders, returns |
@@ -147,8 +147,9 @@ Notes:
 - **Commission** (% per franchise) on the taxable value of every sale; Finance marks it paid with a UTR. Returns put the stock back to the franchise and cancel unpaid commission.
 - Suspend (no new sales) / close / re-activate a franchise. Roles: Super Admin & Operations manage; Finance pays commission.
 
-### Super Admin login OTP
-- After the correct password, a Super Admin must enter a **6-digit OTP sent by SMS** to `SUPER_ADMIN_OTP_MOBILE` (set to **+917250227201**). 5-minute expiry, 5 wrong tries per OTP, resend after 30 s, max 6 OTPs per 15 min, single use, every step in the audit log.
+### Super Admin login OTP (currently OFF)
+- **Switched off for now.** To switch it on again set `SUPER_ADMIN_OTP=true` (Render → Environment, or `Backend/.env`). The code and the `OtpCode` table are kept, so nothing else is needed.
+- After the correct password, a Super Admin must enter a **6-digit OTP sent by SMS** to `SUPER_ADMIN_OTP_MOBILE` (default **+917250227201**, also the demo Super Admin's mobile). 5-minute expiry, 5 wrong tries per OTP, resend after 30 s, max 6 OTPs per 15 min, single use, every step in the audit log.
 - SMS providers: `console` (development), `fast2sms`, `msg91`, `twilio` — see `Backend/.env.example`. Other staff roles and distributors log in as before.
 
 ### Upgrading an existing database
@@ -178,7 +179,7 @@ Notes:
 
 ## 8. Before going live: must-do list
 
-- [ ] **Set up the SMS gateway for the Super Admin OTP** (`SMS_PROVIDER`, `SMS_API_KEY`, template id in `Backend/.env`). Until then the OTP only appears in the server log. Indian SMS needs a DLT-registered sender ID and template.
+- [ ] *(When the OTP is switched on)* **Set up the SMS gateway for the Super Admin OTP** (`SMS_PROVIDER`, `SMS_API_KEY`, template id in `Backend/.env`). Until then the OTP only appears in the server log. Indian SMS needs a DLT-registered sender ID and template.
 - [ ] Switch **Autopool** on (Admin → Autopool → Settings) only after the legal review below, and confirm the repurchase rule (each level separately vs. total BV).
 
 - [ ] Replace the **demo payment button** with a real gateway (Razorpay / PayU / Cashfree) and its webhook → `markOrderPaid()` in `Backend/src/services/orders.ts`.

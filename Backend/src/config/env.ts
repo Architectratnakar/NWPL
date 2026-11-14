@@ -58,10 +58,11 @@ const schema = z.object({
     .transform((v) => v === 'true'),
 
   // ---- Super Admin login OTP ----
+  /** OFF for now. Set SUPER_ADMIN_OTP=true to switch the Super Admin login OTP back on (code and OtpCode table are kept). */
   SUPER_ADMIN_OTP: z
     .string()
-    .default('true')
-    .transform((v) => v !== 'false'),
+    .default('false')
+    .transform((v) => v.trim().toLowerCase() === 'true'),
   /** Where the Super Admin OTP is sent (company owner's mobile). Set it to an empty value to use each Super Admin's own registered mobile. */
   SUPER_ADMIN_OTP_MOBILE: z.string().trim().default('+917250227201'),
   OTP_EXPIRY_MINUTES: z.coerce.number().int().min(1).max(30).default(5),

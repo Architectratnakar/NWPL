@@ -38,7 +38,7 @@ services:
       - key: DEMO_PAYMENTS
         value: "true"
       - key: SUPER_ADMIN_OTP
-        value: "true"
+        value: "false"   # set to "true" to switch the Super Admin login OTP back on
       - key: SUPER_ADMIN_OTP_MOBILE
         value: "+917250227201"
       - key: SMS_PROVIDER
