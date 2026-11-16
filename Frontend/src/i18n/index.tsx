@@ -6,7 +6,7 @@ const dict = {
   en: {
     tagline: 'Jiyo Zindagi Shaan Se', welcome: 'Welcome back', loginSub: 'Sign in to your distributor or admin account',
     userId: 'Distributor ID / Mobile / Email', password: 'Password', login: 'Sign in', forgot: 'Forgot password?',
-    noAccount: 'New distributor?', register: 'Create an account', demo: 'Demo logins — click to fill',
+    noAccount: 'New distributor?', register: 'Create an account',
     dashboard: 'Dashboard', activate: 'Activate / Upgrade', shop: 'Shop', orders: 'My Orders', genealogy: 'Genealogy Tree',
     team: 'My Team', income: 'Income', wallet: 'Wallet & Payouts', ranks: 'Ranks & Rewards', kyc: 'KYC', profile: 'Profile',
     support: 'Support', plan: 'Business Plan', logout: 'Log out', members: 'Distributors', users: 'Staff Users',
@@ -20,7 +20,7 @@ const dict = {
   hi: {
     tagline: 'जियो ज़िंदगी शान से', welcome: 'फिर से स्वागत है', loginSub: 'अपने डिस्ट्रीब्यूटर या एडमिन खाते में लॉग इन करें',
     userId: 'डिस्ट्रीब्यूटर आईडी / मोबाइल / ईमेल', password: 'पासवर्ड', login: 'लॉग इन', forgot: 'पासवर्ड भूल गए?',
-    noAccount: 'नए डिस्ट्रीब्यूटर?', register: 'खाता बनाएं', demo: 'डेमो लॉगिन — भरने के लिए क्लिक करें',
+    noAccount: 'नए डिस्ट्रीब्यूटर?', register: 'खाता बनाएं',
     dashboard: 'डैशबोर्ड', activate: 'एक्टिवेट / अपग्रेड', shop: 'खरीदारी', orders: 'मेरे ऑर्डर', genealogy: 'जीनियोलॉजी ट्री',
     team: 'मेरी टीम', income: 'आय', wallet: 'वॉलेट और भुगतान', ranks: 'रैंक और रिवॉर्ड', kyc: 'केवाईसी', profile: 'प्रोफ़ाइल',
     support: 'सहायता', plan: 'बिज़नेस प्लान', logout: 'लॉग आउट', members: 'डिस्ट्रीब्यूटर', users: 'स्टाफ़ यूज़र',
