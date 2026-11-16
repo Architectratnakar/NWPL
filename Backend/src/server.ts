@@ -11,6 +11,8 @@ async function main() {
     const to = env.SUPER_ADMIN_OTP_MOBILE || "each Super Admin's own mobile";
     console.log(`🔐 Super Admin login needs an OTP → ${to} (SMS provider: ${env.SMS_PROVIDER})`);
     if (env.SMS_PROVIDER === 'console') console.log('   ⚠️  SMS_PROVIDER=console: no SMS is sent, the OTP is printed in this log. Set fast2sms / msg91 / twilio in Backend/.env for real SMS.');
+  } else {
+    console.log('🔓 Super Admin OTP is OFF — Super Admin signs in with ID + password (set SUPER_ADMIN_OTP=true to turn it on).');
   }
   const app = createApp();
   app.listen(env.PORT, () => {

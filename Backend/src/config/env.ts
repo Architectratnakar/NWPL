@@ -58,10 +58,12 @@ const schema = z.object({
     .transform((v) => v === 'true'),
 
   // ---- Super Admin login OTP ----
+  // OFF by default: the Super Admin signs in with ID + password only.
+  // Set SUPER_ADMIN_OTP=true to require the SMS OTP again (the OTP code and OtpCode table are kept).
   SUPER_ADMIN_OTP: z
     .string()
-    .default('true')
-    .transform((v) => v !== 'false'),
+    .default('false')
+    .transform((v) => v.trim().toLowerCase() === 'true'),
   /** Where the Super Admin OTP is sent. Empty = the Super Admin's own registered mobile. */
   SUPER_ADMIN_OTP_MOBILE: z.string().trim().default(''),
   OTP_EXPIRY_MINUTES: z.coerce.number().int().min(1).max(30).default(5),
