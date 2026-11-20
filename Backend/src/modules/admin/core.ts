@@ -8,7 +8,7 @@ import { ROLES, STAFF } from '../../lib/auth';
 import { badRequest, forbidden, notFound } from '../../lib/http';
 import { audit } from '../../lib/audit';
 import { getSettings } from '../../lib/settings';
-import { decrypt } from '../../lib/crypto';
+import { decrypt, encrypt } from '../../lib/crypto';
 
 /* ======================= DASHBOARD ======================= */
 export const dashboard = createModule('/admin/dashboard', 'Admin · Dashboard');
@@ -171,33 +171,171 @@ members.get('/:id', {
   },
 });
 
+const MemberStatusEnum = z.enum(['REGISTERED', 'ACTIVE', 'BLOCKED', 'TERMINATED']);
+const BankBody = z.object({
+  holderName: z.string().trim().min(3, 'Account holder name needs at least 3 letters'),
+  accountNumber: z.string().trim().regex(/^\d{9,18}$/, 'Account number must be 9–18 digits').optional().or(z.literal('')).openapi({ description: 'Empty = keep the current account number' }),
+  ifsc: z.string().trim().toUpperCase().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, 'Enter a valid IFSC (e.g. SBIN0001234)'),
+  bankName: z.string().trim().optional().nullable(),
+  verified: z.boolean().optional(),
+});
+const NomineeBody = z.object({
+  name: z.string().trim().min(3, 'Nominee name needs at least 3 letters'),
+  relation: z.string().trim().min(2, 'Enter the relation'),
+  dob: z.coerce.date().optional().nullable().or(z.literal('').transform(() => null)),
+});
+const AddressBody = z.object({ line1: z.string().trim().optional(), city: z.string().trim().optional(), state: z.string().trim().optional(), pincode: z.string().trim().optional() });
+
 members.patch('/:id', {
   summary: 'Edit member details / status / wallet hold / special-bonus verification',
   access: ROLES.OPS,
   body: z.object({
-    fullName: z.string().min(3).optional(),
-    status: z.enum(['REGISTERED', 'ACTIVE', 'BLOCKED', 'TERMINATED']).optional(),
+    fullName: z.string().trim().min(2, 'Name needs at least 2 letters').max(100).optional(),
+    mobile: z.string().trim().regex(/^[6-9]\d{9}$/, 'Enter a valid 10-digit mobile number').optional().openapi({ description: 'Super Admin only — this is also the login ID' }),
+    email: z.string().trim().email('Enter a valid email').optional().or(z.literal('')).nullable().openapi({ description: 'Super Admin only. Empty = remove' }),
+    gender: z.enum(['MALE', 'FEMALE', 'OTHER']).optional().nullable().or(z.literal('').transform(() => null)),
+    dob: z.coerce.date().optional().nullable().or(z.literal('').transform(() => null)),
+    address: AddressBody.optional().nullable(),
+    status: MemberStatusEnum.optional(),
     specialBonusVerified: z.boolean().optional(),
     walletOnHold: z.boolean().optional(),
-    reason: z.string().min(3).openapi({ description: 'Required: why the change was made (kept in the audit log)' }),
+    bank: BankBody.optional().openapi({ description: 'Super Admin only' }),
+    nominee: NomineeBody.nullable().optional().openapi({ description: 'Super Admin only. null = remove the nominee' }),
+    reason: z.string().trim().max(500).optional().openapi({ description: 'Why the change was made (kept in the audit log)' }),
   }),
-  handler: async ({ params, body, req }) => {
-    const before = await prisma.member.findUnique({ where: { id: params.id }, include: { wallet: true } });
-    if (!before) throw notFound('Member');
-    const { reason, walletOnHold, ...data } = body;
-    await prisma.$transaction(async (tx) => {
-      if (Object.keys(data).length) await tx.member.update({ where: { id: params.id }, data });
-      if (walletOnHold !== undefined) await tx.wallet.update({ where: { memberId: params.id }, data: { onHold: walletOnHold } });
-      if (data.status === 'BLOCKED' || data.status === 'TERMINATED') {
-        await tx.user.update({ where: { id: before.userId }, data: { isActive: false } });
-        await tx.refreshToken.updateMany({ where: { userId: before.userId, revokedAt: null }, data: { revokedAt: new Date() } });
-      }
-      if (data.status === 'ACTIVE' || data.status === 'REGISTERED') await tx.user.update({ where: { id: before.userId }, data: { isActive: true } });
-      await audit(req, 'MEMBER.ADMIN_UPDATE', 'Member', params.id,
-        { fullName: before.fullName, status: before.status, specialBonusVerified: before.specialBonusVerified, walletOnHold: before.wallet?.onHold },
-        { ...body }, tx);
-    });
+  handler: async ({ params, body, req, user }) => {
+    const before = await prisma.member.findUnique({ where: { id: params.id }, include: { wallet: true, bank: true, nominee: true, user: { select: { mobile: true, email: true } } } });
+    if (!before) throw notFound('Distributor');
+    const { reason, walletOnHold, mobile, email, bank, nominee, ...data } = body;
+    if ((bank || nominee !== undefined) && user.role !== 'ADMIN_SUPER') throw forbidden('Only the Super Admin can change bank or nominee details');
+    if (bank && !bank.accountNumber && !before.bank) throw badRequest('Enter the bank account number');
+
+    // the login ID (mobile / email) can only be changed by the Super Admin
+    const userData: Prisma.UserUpdateInput = {};
+    if (mobile !== undefined && mobile !== before.user.mobile) userData.mobile = mobile;
+    if (email !== undefined && (email || null) !== before.user.email) userData.email = email ? email.toLowerCase() : null;
+    if (Object.keys(userData).length && user.role !== 'ADMIN_SUPER') throw forbidden('Only the Super Admin can change mobile or email');
+    if (userData.mobile && (await prisma.user.findFirst({ where: { mobile: mobile!, NOT: { id: before.userId } } }))) throw badRequest(`Mobile ${mobile} is already used by another login`);
+    if (userData.email && (await prisma.user.findFirst({ where: { email: userData.email as string, NOT: { id: before.userId } } }))) throw badRequest(`Email ${userData.email} is already used by another login`);
+
+    const memberData: Prisma.MemberUpdateInput = {};
+    if (data.fullName !== undefined) memberData.fullName = data.fullName;
+    if (data.status !== undefined) memberData.status = data.status;
+    if (data.specialBonusVerified !== undefined) memberData.specialBonusVerified = data.specialBonusVerified;
+    if (data.gender !== undefined) memberData.gender = data.gender;
+    if (data.dob !== undefined) memberData.dob = data.dob;
+    if (data.address !== undefined) memberData.address = data.address ? (data.address as Prisma.InputJsonValue) : Prisma.JsonNull;
+
+    await prisma.$transaction(
+      async (tx) => {
+        if (Object.keys(memberData).length) await tx.member.update({ where: { id: params.id }, data: memberData });
+        // upsert: older members may have no wallet row yet — update() would fail with "Record not found"
+        if (bank) {
+          const acc = bank.accountNumber
+            ? { accountNoEnc: encrypt(bank.accountNumber), accountLast4: bank.accountNumber.slice(-4) }
+            : { accountNoEnc: before.bank!.accountNoEnc, accountLast4: before.bank!.accountLast4 };
+          // an account entered / checked by the Super Admin counts as verified unless they untick it
+          const b = { holderName: bank.holderName, ifsc: bank.ifsc, bankName: bank.bankName || null, verified: bank.verified ?? true, ...acc };
+          await tx.bankAccount.upsert({ where: { memberId: params.id }, create: { memberId: params.id, ...b }, update: b });
+        }
+        if (nominee === null) await tx.nominee.deleteMany({ where: { memberId: params.id } });
+        else if (nominee) {
+          const n = { name: nominee.name, relation: nominee.relation, dob: nominee.dob ?? null };
+          await tx.nominee.upsert({ where: { memberId: params.id }, create: { memberId: params.id, ...n }, update: n });
+        }
+        if (walletOnHold !== undefined) await tx.wallet.upsert({ where: { memberId: params.id }, create: { memberId: params.id, onHold: walletOnHold }, update: { onHold: walletOnHold } });
+        if (data.status === 'BLOCKED' || data.status === 'TERMINATED') {
+          await tx.user.update({ where: { id: before.userId }, data: { ...userData, isActive: false } });
+          await tx.refreshToken.updateMany({ where: { userId: before.userId, revokedAt: null }, data: { revokedAt: new Date() } });
+        } else if (data.status === 'ACTIVE' || data.status === 'REGISTERED') {
+          await tx.user.update({ where: { id: before.userId }, data: { ...userData, isActive: true } });
+        } else if (Object.keys(userData).length) {
+          await tx.user.update({ where: { id: before.userId }, data: userData });
+        }
+        await audit(req, 'MEMBER.ADMIN_UPDATE', 'Member', params.id,
+          { fullName: before.fullName, gender: before.gender, dob: before.dob, address: before.address, mobile: before.user.mobile,
+            bank: before.bank ? { holderName: before.bank.holderName, last4: before.bank.accountLast4, ifsc: before.bank.ifsc, bankName: before.bank.bankName, verified: before.bank.verified } : null,
+            nominee: before.nominee ? { name: before.nominee.name, relation: before.nominee.relation } : null, email: before.user.email, status: before.status, specialBonusVerified: before.specialBonusVerified, walletOnHold: before.wallet?.onHold },
+          // never write the full account number into the audit log
+          { ...body, bank: bank ? { ...bank, accountNumber: bank.accountNumber ? `••••${bank.accountNumber.slice(-4)}` : '(unchanged)' } : undefined, reason: reason || 'Updated by admin' }, tx);
+      },
+      { maxWait: 10_000, timeout: 20_000 }, // hosted databases (Render) can be slow; the default 5 s timeout made saves fail
+    );
     return { ok: true };
+  },
+});
+
+/* ---------- delete ---------- */
+/** Why a distributor can NOT be deleted (empty list = safe to delete). Anyone with team, money or BV history must be Terminated instead. */
+async function deleteBlockers(id: string) {
+  const m = await prisma.member.findUnique({ where: { id }, include: { wallet: true, user: { select: { role: true, franchise: { select: { id: true } } } } } });
+  if (!m) throw notFound('Distributor');
+  const [children, directs, orders, bv, closing, ranks, txns, withdrawals, autopool] = await Promise.all([
+    prisma.member.count({ where: { parentId: id } }),
+    prisma.member.count({ where: { sponsorId: id } }),
+    prisma.order.count({ where: { memberId: id } }),
+    prisma.bvPosting.count({ where: { memberId: id } }),
+    prisma.closingLine.count({ where: { memberId: id } }),
+    prisma.memberRank.count({ where: { memberId: id } }),
+    prisma.walletTxn.count({ where: { memberId: id } }),
+    prisma.withdrawal.count({ where: { memberId: id } }),
+    prisma.autopoolEntry.count({ where: { memberId: id } }),
+  ]);
+  const why: string[] = [];
+  if (!m.parentId && !m.sponsorId) why.push('This is the Company ID (top of the tree)');
+  if (children) why.push(`${children} member(s) are placed directly under this ID in the tree`);
+  if (directs) why.push(`${directs} member(s) were sponsored by this ID`);
+  if (orders) why.push(`${orders} order(s) / invoice(s)`);
+  if (bv) why.push(`${bv} BV posting(s)`);
+  if (closing) why.push(`${closing} closing / income line(s)`);
+  if (ranks) why.push(`${ranks} rank(s) achieved`);
+  if (txns) why.push(`${txns} wallet transaction(s)`);
+  if (withdrawals) why.push(`${withdrawals} withdrawal(s)`);
+  if (autopool) why.push('Autopool entry');
+  if (m.wallet && Number(m.wallet.balance) !== 0) why.push(`Wallet balance ₹${m.wallet.balance}`);
+  if (m.user.role !== 'MEMBER' || m.user.franchise) why.push('This login is also a staff / franchise login');
+  return { member: m, blockers: why };
+}
+
+members.get('/:id/delete-check', {
+  summary: 'Super Admin: can this distributor be deleted? Lists what is blocking it',
+  access: ROLES.SUPER,
+  handler: async ({ params }) => {
+    const { member, blockers } = await deleteBlockers(params.id);
+    return { code: member.distributorCode, name: member.fullName, status: member.status, canDelete: blockers.length === 0, blockers };
+  },
+});
+
+members.delete('/:id', {
+  summary: 'Super Admin: permanently delete a distributor that has no team, orders, BV or money history',
+  access: ROLES.SUPER,
+  query: z.object({ confirm: z.string().trim().openapi({ description: 'Type the distributor code (e.g. NW100123) to confirm' }), reason: z.string().trim().max(500).optional() }),
+  handler: async ({ params, query, req }) => {
+    const { member: m, blockers } = await deleteBlockers(params.id);
+    if (query.confirm.toUpperCase() !== m.distributorCode) throw badRequest(`Type ${m.distributorCode} to confirm the delete`);
+    if (blockers.length) throw badRequest(`${m.distributorCode} cannot be deleted: ${blockers.join('; ')}. Set the status to Terminated instead.`);
+    const docs = await prisma.kycDocument.findMany({ where: { memberId: m.id }, select: { id: true } });
+    await prisma.$transaction(
+      async (tx) => {
+        await tx.ticket.deleteMany({ where: { memberId: m.id } });
+        await tx.kycDocument.deleteMany({ where: { memberId: m.id } });
+        await tx.bankAccount.deleteMany({ where: { memberId: m.id } });
+        await tx.nominee.deleteMany({ where: { memberId: m.id } });
+        await tx.nodeVolume.deleteMany({ where: { memberId: m.id } });
+        await tx.wallet.deleteMany({ where: { memberId: m.id } });
+        await tx.franchise.updateMany({ where: { ownerMemberId: m.id }, data: { ownerMemberId: null } });
+        await tx.member.delete({ where: { id: m.id } });
+        await tx.refreshToken.deleteMany({ where: { userId: m.userId } });
+        await tx.otpCode.deleteMany({ where: { userId: m.userId } });
+        await tx.user.delete({ where: { id: m.userId } });
+        // the audit log keeps a record of who was deleted and why (the audit log itself can never be deleted)
+        await audit(req, 'MEMBER.DELETE', 'Member', m.id,
+          { code: m.distributorCode, name: m.fullName, status: m.status, sponsorId: m.sponsorId, parentId: m.parentId, side: m.side, kycDocs: docs.length },
+          { reason: query.reason || 'Deleted by Super Admin' }, tx);
+      },
+      { maxWait: 10_000, timeout: 20_000 },
+    );
+    return { ok: true, code: m.distributorCode };
   },
 });
 
