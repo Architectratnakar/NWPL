@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { createModule, PageQuery } from '../../lib/openapi';
 import { ROLES } from '../../lib/auth';
-import { notFound } from '../../lib/http';
+import { badRequest, notFound } from '../../lib/http';
 
 /**
  * Distributor income — Super Admin only.
@@ -23,10 +23,18 @@ const Filters = z.object({
   sort: z.enum(['total', 'recent', 'name']).default('total'),
 });
 
-function period(from?: Date, to?: Date) {
-  const start = from ?? new Date('2000-01-01T00:00:00Z');
-  // "to" is a calendar day chosen in the UI → include the whole day
-  const end = to ? new Date(to.getTime() + DAY) : new Date(Date.now() + DAY);
+const IST = 330 * 60_000; // India is UTC+05:30
+
+/**
+ * The From / To boxes are calendar days in India. Closings start at IST midnight (e.g. the closing of
+ * 21 Nov starts at 2026-11-20T18:30Z), so a day must be cut at IST midnight, not UTC midnight.
+ * "2026-11-21" is parsed as 2026-11-21T00:00Z → minus 5:30 = 21 Nov 00:00 IST.
+ * Returns [start, end): start inclusive, end exclusive (= the next IST midnight after "to").
+ */
+export function period(from?: Date, to?: Date) {
+  const start = from ? new Date(from.getTime() - IST) : new Date('2000-01-01T00:00:00Z');
+  const end = to ? new Date(to.getTime() - IST + DAY) : new Date(Date.now() + DAY);
+  if (end <= start) throw badRequest('"To" date must be on or after the "From" date');
   return { start, end };
 }
 

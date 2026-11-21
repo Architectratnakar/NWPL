@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Boxes, IndianRupee, PackageCheck, Pencil, Plus, RotateCcw, Search, ShoppingCart, Trash2 } from 'lucide-react';
-import { get, openAuthed, patch, post, put } from '@/api/client';
+import { del, get, openAuthed, patch, post, put } from '@/api/client';
 import { useAuth } from '@/auth/AuthContext';
-import { Badge, Button, Callout, Card, DataTable, Field, Input, Modal, PageHeader, Pagination, Select, Tabs, useToast } from '@/components/ui';
+import { Badge, Button, Callout, Card, DataTable, Field, Input, Modal, PageHeader, Pagination, Select, Tabs, Textarea, useToast } from '@/components/ui';
 import { bv, date, dateTime, inr, num, titleCase } from '@/lib/format';
 import { useAction } from '@/lib/hooks';
 
@@ -137,11 +137,19 @@ export function Packages() {
 export function AdminOrders() {
   const [f, setF] = useState({ q: '', type: '', status: '' });
   const [page, setPage] = useState(1);
-  const { data, isLoading } = useQuery({ queryKey: ['admin-orders', f, page], queryFn: () => get('/admin/orders', { q: f.q || undefined, type: f.type || undefined, status: f.status || undefined, page }) });
+  // cancelled orders are hidden unless "Cancelled" (or "All incl. cancelled") is chosen
+  const statusParams = f.status === 'ALL' ? { showCancelled: true } : { status: f.status || undefined };
+  const { data, isLoading } = useQuery({ queryKey: ['admin-orders', f, page], queryFn: () => get('/admin/orders', { q: f.q || undefined, type: f.type || undefined, ...statusParams, page }) });
   const { hasRole } = useAuth();
   const { busy, run } = useAction();
   const move = (id: string, status: string) => run(id + status, () => patch(`/admin/orders/${id}/status`, { status }), { success: `Order marked ${status.toLowerCase()}`, invalidate: ['admin-orders'] });
   const canOps = hasRole('ADMIN_SUPER', 'ADMIN_OPS');
+  const isSuper = hasRole('ADMIN_SUPER');
+  const [cancel, setCancel] = useState<any>(null);
+  const [why, setWhy] = useState('');
+  const [remove, setRemove] = useState<any>(null);
+  const doCancel = () => run('cx', () => patch(`/admin/orders/${cancel.id}/status`, { status: 'CANCELLED', note: why.trim() }), { success: `Order ${cancel.orderNo} cancelled`, invalidate: ['admin-orders'] })
+    .then((r) => { if (r) { setCancel(null); setWhy(''); } });
   return (
     <div>
       <PageHeader icon={<ShoppingCart className="h-5 w-5" />} title="Orders" subtitle="Payments, invoices and dispatch" />
@@ -149,7 +157,7 @@ export function AdminOrders() {
         <div className="grid gap-3 md:grid-cols-[1fr_180px_200px]">
           <div className="relative"><Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input className="pl-10" placeholder="Order no, invoice no or distributor ID" value={f.q} onChange={(e) => { setF({ ...f, q: e.target.value }); setPage(1); }} /></div>
           <Select value={f.type} onChange={(e) => { setF({ ...f, type: e.target.value }); setPage(1); }} placeholder="All types" options={['JOINING', 'UPGRADE', 'REPURCHASE', 'RETAIL'].map((s) => ({ value: s, label: titleCase(s) }))} />
-          <Select value={f.status} onChange={(e) => { setF({ ...f, status: e.target.value }); setPage(1); }} placeholder="All statuses" options={['PENDING_PAYMENT', 'INVOICED', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'RETURNED'].map((s) => ({ value: s, label: titleCase(s) }))} />
+          <Select value={f.status} onChange={(e) => { setF({ ...f, status: e.target.value }); setPage(1); }} placeholder="All (cancelled hidden)" options={[...['PENDING_PAYMENT', 'INVOICED', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'RETURNED'].map((s) => ({ value: s, label: titleCase(s) })), { value: 'ALL', label: 'All incl. cancelled' }]} />
         </div>
       </Card>
       <Card noPad>
@@ -160,14 +168,50 @@ export function AdminOrders() {
           { key: 'grandTotal', header: 'Amount', align: 'right', render: (r: any) => <div><b>{inr(r.grandTotal)}</b><p className="text-xs text-slate-500">{bv(r.bvTotal)} BV</p></div> },
           { key: 'status', header: 'Status', render: (r: any) => <div><Badge status={r.status} />{r.invoiceNo && <button className="link mt-1 block text-[11px]" onClick={() => openAuthed(`/orders/${r.id}/invoice`)}>{r.invoiceNo}</button>}</div> },
           { key: 'a', header: '', align: 'right', render: (r: any) => canOps && <div className="flex justify-end gap-1">
-            {r.status === 'PENDING_PAYMENT' && <><Button size="sm" variant="secondary" loading={busy === r.id + 'PAID'} onClick={() => move(r.id, 'PAID')}>Cash paid</Button><Button size="sm" variant="ghost" onClick={() => move(r.id, 'CANCELLED')}>Cancel</Button></>}
+            {r.status === 'PENDING_PAYMENT' && <><Button size="sm" variant="secondary" loading={busy === r.id + 'PAID'} onClick={() => move(r.id, 'PAID')}>Cash paid</Button><Button size="sm" variant="ghost" onClick={() => { setWhy(''); setCancel(r); }}>Cancel</Button></>}
             {['INVOICED', 'PAID'].includes(r.status) && <Button size="sm" variant="secondary" loading={busy === r.id + 'SHIPPED'} onClick={() => move(r.id, 'SHIPPED')}>Ship</Button>}
             {r.status === 'SHIPPED' && <Button size="sm" variant="secondary" loading={busy === r.id + 'DELIVERED'} onClick={() => move(r.id, 'DELIVERED')}>Delivered</Button>}
+            {isSuper && ['PENDING_PAYMENT', 'CANCELLED'].includes(r.status) && <Button size="sm" variant="ghost" title="Delete order" aria-label="Delete order" icon={<Trash2 className="h-4 w-4 text-red-600" />} onClick={() => setRemove(r)} />}
           </div> },
         ]} />
         {data && <Pagination page={page} pageSize={data.pageSize} total={data.total} onChange={setPage} />}
       </Card>
+      <p className="mt-3 text-xs text-slate-500">Paid orders (invoiced, shipped, delivered, returned) are kept for GST and BV and can’t be deleted — use a return / buy-back instead.</p>
+
+      <Modal open={!!cancel} onClose={() => setCancel(null)} title={`Cancel order ${cancel?.orderNo ?? ''}?`} size="sm"
+        footer={<><Button variant="ghost" onClick={() => setCancel(null)}>Keep order</Button><Button variant="danger" loading={busy === 'cx'} disabled={why.trim().length < 5} onClick={doCancel}>Cancel order</Button></>}>
+        <p className="mb-3 text-sm text-slate-600">{cancel?.member?.fullName} ({cancel?.member?.distributorCode}) · {inr(cancel?.grandTotal)} · not paid yet. After cancelling it can’t be paid.</p>
+        <Field label="Reason *" hint="At least 5 characters, saved in the audit log"><Textarea value={why} maxLength={300} onChange={(e) => setWhy(e.target.value)} /></Field>
+      </Modal>
+      {remove && <DeleteOrderModal order={remove} onClose={() => setRemove(null)} />}
     </div>
+  );
+}
+
+/** Super Admin delete: asks the server what (if anything) blocks it, then needs a reason. */
+function DeleteOrderModal({ order, onClose }: { order: any; onClose: () => void }) {
+  const { data: check, isFetching } = useQuery({ queryKey: ['order-delete-check', order.id], queryFn: () => get(`/admin/orders/${order.id}/delete-check`), staleTime: 0, gcTime: 0 });
+  const [reason, setReason] = useState('');
+  const { busy, run } = useAction();
+  const doDelete = () => run('del', () => del(`/admin/orders/${order.id}?reason=${encodeURIComponent(reason.trim())}`), { success: `Order ${order.orderNo} deleted`, invalidate: ['admin-orders'] }).then((r) => r && onClose());
+  return (
+    <Modal open onClose={onClose} title={`Delete order ${order.orderNo}?`} size="sm"
+      footer={check?.canDelete
+        ? <><Button variant="ghost" onClick={onClose}>Cancel</Button><Button variant="danger" loading={busy === 'del'} disabled={reason.trim().length < 5} icon={<Trash2 className="h-4 w-4" />} onClick={doDelete}>Delete permanently</Button></>
+        : <Button variant="ghost" onClick={onClose}>Close</Button>}>
+      {isFetching || !check ? <p className="text-sm text-slate-500">Checking this order…</p> : check.canDelete ? (
+        <div className="space-y-3 text-sm">
+          <p>{order.member?.fullName} ({order.member?.distributorCode}) · {inr(order.grandTotal)} · {titleCase(order.status)}. The order, its items and its unpaid payment attempts are removed. The audit log keeps a record.</p>
+          <Field label="Reason *" hint="At least 5 characters"><Textarea value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} /></Field>
+        </div>
+      ) : (
+        <div className="space-y-2 text-sm text-slate-700">
+          <p>This order can’t be deleted:</p>
+          <ul className="list-disc space-y-1 pl-5">{check.blockers.map((b: string) => <li key={b}>{b}</li>)}</ul>
+          <p>Use a <b>return / buy-back</b> instead.</p>
+        </div>
+      )}
+    </Modal>
   );
 }
 

@@ -163,6 +163,17 @@ Credit (add) or debit (take) money in a distributor's wallet by hand, with two p
 - Every request, approval and rejection is in the audit log with the balance before and after. The list downloads as CSV.
 - No database change: it uses the existing `PendingAction`, `WalletTxn` and `Counter` tables.
 
+### Cancelling and deleting orders
+
+- **Distributor (My orders):** an unpaid order can be cancelled, with an optional reason. A cancelled order can then be **removed** from the list. Cancelled orders are hidden unless *Show cancelled* is ticked.
+- **Admin (Orders):** Super Admin and Ops can cancel an unpaid order; a reason is required. The **Super Admin** can delete an order only if it was never paid:
+  - its status is Pending payment or Cancelled;
+  - it has no invoice number, no successful payment, no BV posting, no return and no franchise sale.
+  The delete button first shows what, if anything, blocks it. Cancelled orders are hidden unless the status filter is *Cancelled* or *All incl. cancelled*.
+- **Paid orders** (invoiced, shipped, delivered, returned) are never deleted, because they are GST records with BV postings. Use a return / buy-back instead.
+- Stock leaves company or franchise stock only when an order is paid, so cancelling or deleting an unpaid order has no stock to put back.
+- Every cancel and delete is written to the audit log with who did it, the order number, the amount, the status before and the reason.
+
 ### Super Admin login OTP
 - **Off by default** (`SUPER_ADMIN_OTP=false`): the Super Admin signs in with ID + password. With `SUPER_ADMIN_OTP=true`, after the correct password a Super Admin must enter a **6-digit OTP sent by SMS** to `SUPER_ADMIN_OTP_MOBILE` (set to **+917250227201**). 5-minute expiry, 5 wrong tries per OTP, resend after 30 s, max 6 OTPs per 15 min, single use, every step in the audit log.
 - SMS providers: `console` (development), `fast2sms`, `msg91`, `twilio` — see `Backend/.env.example`. Other staff roles and distributors log in as before.

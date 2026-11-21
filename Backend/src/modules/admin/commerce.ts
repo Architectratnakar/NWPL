@@ -7,6 +7,7 @@ import { badRequest, notFound } from '../../lib/http';
 import { audit } from '../../lib/audit';
 import { ensurePackagePriceOptional } from '../../lib/dbcheck';
 import { approveReturn, currentPrices, markOrderPaid, packagePrice } from '../../services/orders';
+import { cancelOrder, deleteOrder, orderDeleteBlockers } from '../../services/orderRemove';
 
 /* ======================= PRODUCTS ======================= */
 export const products = createModule('/admin/products', 'Admin · Products');
@@ -186,10 +187,12 @@ orders.get('/', {
     q: z.string().optional(),
     type: z.enum(['JOINING', 'UPGRADE', 'REPURCHASE', 'RETAIL']).optional(),
     status: z.enum(['PENDING_PAYMENT', 'PAID', 'INVOICED', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'RETURNED']).optional(),
+    showCancelled: z.enum(['true', 'false']).default('false').transform((v) => v === 'true').openapi({ description: 'Cancelled orders are hidden unless this is true or status=CANCELLED' }),
   }),
   handler: async ({ query }) => {
     const where: Prisma.OrderWhereInput = {
-      type: query.type, status: query.status,
+      type: query.type,
+      status: query.status ?? (query.showCancelled ? undefined : { not: 'CANCELLED' }),
       ...(query.q ? { OR: [{ orderNo: { contains: query.q.toUpperCase() } }, { invoiceNo: { contains: query.q.toUpperCase() } }, { member: { distributorCode: { contains: query.q.toUpperCase() } } }] } : {}),
     };
     const [items, total] = await Promise.all([
@@ -211,8 +214,9 @@ orders.patch('/:id/status', {
       if (o.status !== 'PENDING_PAYMENT') throw badRequest('Only unpaid orders can be marked paid');
       await markOrderPaid(o.id, 'CASH_FRANCHISE', `CASH-${Date.now()}`, user.id);
     } else if (body.status === 'CANCELLED') {
-      if (o.status !== 'PENDING_PAYMENT') throw badRequest('Paid orders must go through a return, not cancel');
-      await prisma.order.update({ where: { id: o.id }, data: { status: 'CANCELLED' } });
+      if (!body.note || body.note.trim().length < 5) throw badRequest('Write why the order is cancelled (at least 5 characters)');
+      await cancelOrder(o.id, req, { by: 'ADMIN', reason: body.note.trim() }); // writes its own audit row
+      return { ok: true };
     } else {
       if (!['INVOICED', 'PAID', 'SHIPPED'].includes(o.status)) throw badRequest(`Cannot move a ${o.status} order to ${body.status}`);
       await prisma.order.update({ where: { id: o.id }, data: { status: body.status } });
@@ -220,6 +224,22 @@ orders.patch('/:id/status', {
     await audit(req, 'ORDER.STATUS', 'Order', o.id, { status: o.status }, body);
     return { ok: true };
   },
+});
+
+orders.get('/:id/delete-check', {
+  summary: 'Super Admin: can this order be deleted? Lists what is blocking it',
+  access: ROLES.SUPER,
+  handler: async ({ params }) => {
+    const { order, blockers } = await orderDeleteBlockers(params.id);
+    return { orderNo: order.orderNo, status: order.status, amount: order.grandTotal, member: order.member, canDelete: blockers.length === 0, blockers };
+  },
+});
+
+orders.delete('/:id', {
+  summary: 'Super Admin: delete an order that was never paid (PENDING_PAYMENT or CANCELLED, no invoice, payment, BV, return or franchise sale)',
+  access: ROLES.SUPER,
+  query: z.object({ reason: z.string().trim().min(5, 'Write why the order is deleted (at least 5 characters)').max(300) }),
+  handler: async ({ params, query, req }) => deleteOrder(params.id, req, { by: 'ADMIN', reason: query.reason }),
 });
 
 export const returns = createModule('/admin/returns', 'Admin · Returns');

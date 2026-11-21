@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { FileText, Package, RotateCcw } from 'lucide-react';
-import { get, openAuthed, post, type Paged } from '@/api/client';
+import { FileText, Package, RotateCcw, Trash2, XCircle } from 'lucide-react';
+import { del, get, openAuthed, post, type Paged } from '@/api/client';
 import { Badge, Button, Card, DataTable, Field, KeyValue, Modal, PageHeader, Pagination, Tabs, Textarea } from '@/components/ui';
 import { bv, date, dateTime, inr } from '@/lib/format';
 import { useAction } from '@/lib/hooks';
@@ -12,13 +12,29 @@ interface Order extends OrderLite { status: string; invoiceNo: string | null; cr
 export default function Orders() {
   const [type, setType] = useState('');
   const [page, setPage] = useState(1);
-  const { data, isLoading } = useQuery({ queryKey: ['orders', type, page], queryFn: () => get<Paged<Order>>('/orders/my', { type: type || undefined, page }) });
+  const [showCancelled, setShowCancelled] = useState(false);
+  const { data, isLoading } = useQuery({
+    queryKey: ['orders', type, page, showCancelled],
+    queryFn: () => get<Paged<Order> & { cancelledCount: number }>('/orders/my', { type: type || undefined, page, showCancelled: showCancelled || undefined }),
+  });
   const [view, setView] = useState<string | null>(null);
   const [pay, setPay] = useState<OrderLite | null>(null);
+  const [cancel, setCancel] = useState<Order | null>(null);
+  const [remove, setRemove] = useState<Order | null>(null);
+  const [why, setWhy] = useState('');
+  const { busy, run } = useAction();
+  const doCancel = () => run('c', () => post(`/orders/${cancel!.id}/cancel`, { reason: why.trim() || undefined }), { success: `Order ${cancel!.orderNo} cancelled`, invalidate: ['orders', 'order'] }).then((r) => { if (r) { setCancel(null); setWhy(''); } });
+  const doRemove = () => run('r', () => del(`/orders/${remove!.id}`), { success: `Order ${remove!.orderNo} removed`, invalidate: ['orders'] }).then((r) => r && setRemove(null));
   return (
     <div>
       <PageHeader icon={<Package className="h-5 w-5" />} title="My orders" subtitle="Joining, upgrade and repurchase orders with GST invoices" />
-      <Tabs value={type} onChange={(v) => { setType(v); setPage(1); }} tabs={[{ value: '', label: 'All' }, { value: 'JOINING', label: 'Joining' }, { value: 'UPGRADE', label: 'Upgrade' }, { value: 'REPURCHASE', label: 'Repurchase' }]} />
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <Tabs value={type} onChange={(v) => { setType(v); setPage(1); }} tabs={[{ value: '', label: 'All' }, { value: 'JOINING', label: 'Joining' }, { value: 'UPGRADE', label: 'Upgrade' }, { value: 'REPURCHASE', label: 'Repurchase' }]} />
+        <label className="mb-4 flex shrink-0 items-center gap-2 text-sm text-slate-600">
+          <input type="checkbox" className="h-4 w-4 accent-brand-700" checked={showCancelled} onChange={(e) => { setShowCancelled(e.target.checked); setPage(1); }} />
+          Show cancelled{data?.cancelledCount ? ` (${data.cancelledCount})` : ''}
+        </label>
+      </div>
       <Card noPad>
         <DataTable loading={isLoading} rows={data?.items} onRowClick={(r) => setView(r.id)} empty="No orders yet"
           columns={[
@@ -28,12 +44,28 @@ export default function Orders() {
             { key: 'bv', header: 'BV', align: 'right', render: (r) => bv(r.bvTotal) },
             { key: 'status', header: 'Status', render: (r) => <div className="flex gap-1"><Badge status={r.status} />{r.returns[0] && <Badge status={r.returns[0].status}>Return {r.returns[0].status.toLowerCase()}</Badge>}</div> },
             { key: 'inv', header: 'Invoice', render: (r) => r.invoiceNo ? <button className="link text-xs" onClick={(e) => { e.stopPropagation(); openAuthed(`/orders/${r.id}/invoice`); }}>{r.invoiceNo}</button>
-                : r.status === 'PENDING_PAYMENT' ? <Button size="sm" onClick={(e) => { e.stopPropagation(); setPay(r); }}>Pay now</Button> : '—' },
+                : r.status === 'PENDING_PAYMENT' ? (
+                  <div className="flex gap-1">
+                    <Button size="sm" onClick={(e) => { e.stopPropagation(); setPay(r); }}>Pay now</Button>
+                    <Button size="sm" variant="ghost" icon={<XCircle className="h-4 w-4" />} onClick={(e) => { e.stopPropagation(); setWhy(''); setCancel(r); }}>Cancel</Button>
+                  </div>
+                ) : r.status === 'CANCELLED' ? (
+                  <Button size="sm" variant="ghost" icon={<Trash2 className="h-4 w-4 text-red-600" />} onClick={(e) => { e.stopPropagation(); setRemove(r); }}>Remove</Button>
+                ) : '—' },
           ]} />
         {data && <Pagination page={page} pageSize={data.pageSize} total={data.total} onChange={setPage} />}
       </Card>
       {view && <OrderDetail id={view} onClose={() => setView(null)} />}
       <PayModal order={pay} onClose={() => setPay(null)} />
+      <Modal open={!!cancel} onClose={() => setCancel(null)} title={`Cancel order ${cancel?.orderNo ?? ''}?`} size="sm"
+        footer={<><Button variant="ghost" onClick={() => setCancel(null)}>Keep order</Button><Button variant="danger" loading={busy === 'c'} onClick={doCancel}>Cancel order</Button></>}>
+        <p className="mb-3 text-sm text-slate-600">This order of <b>{inr(cancel?.grandTotal)}</b> is not paid yet. After cancelling it can’t be paid; place a new order if you need it again.</p>
+        <Field label="Reason (optional)"><Textarea value={why} maxLength={300} onChange={(e) => setWhy(e.target.value)} /></Field>
+      </Modal>
+      <Modal open={!!remove} onClose={() => setRemove(null)} title={`Remove order ${remove?.orderNo ?? ''}?`} size="sm"
+        footer={<><Button variant="ghost" onClick={() => setRemove(null)}>Keep</Button><Button variant="danger" loading={busy === 'r'} icon={<Trash2 className="h-4 w-4" />} onClick={doRemove}>Remove</Button></>}>
+        <p className="text-sm text-slate-600">This cancelled order was never paid. It will be removed from your order list permanently.</p>
+      </Modal>
     </div>
   );
 }

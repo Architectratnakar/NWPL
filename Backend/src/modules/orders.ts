@@ -7,6 +7,7 @@ import { env } from '../config/env';
 import { createOrder, markOrderPaid, requestReturn } from '../services/orders';
 import { renderInvoice } from '../services/invoice';
 import { audit } from '../lib/audit';
+import { cancelOrder, deleteOrder } from '../services/orderRemove';
 
 const m = createModule('/orders', 'Orders');
 
@@ -34,6 +35,7 @@ m.post('/:id/pay', {
     const order = await prisma.order.findUnique({ where: { id: params.id } });
     if (!order) throw notFound('Order');
     if (order.memberId !== user.memberId && !isStaff(user)) throw forbidden();
+    if (order.status === 'CANCELLED') throw badRequest(`Order ${order.orderNo} is cancelled and cannot be paid. Place a new order.`);
     const paid = await markOrderPaid(order.id, 'DEMO', `DEMO-${Date.now()}`);
     await audit(req, 'ORDER.PAID', 'Order', order.id, undefined, { gateway: 'DEMO' });
     return paid;
@@ -41,16 +43,34 @@ m.post('/:id/pay', {
 });
 
 m.get('/my', {
-  summary: 'My orders',
-  query: PageQuery.extend({ type: z.enum(['JOINING', 'UPGRADE', 'REPURCHASE', 'RETAIL']).optional() }),
+  summary: 'My orders (cancelled orders are hidden unless showCancelled=true)',
+  query: PageQuery.extend({
+    type: z.enum(['JOINING', 'UPGRADE', 'REPURCHASE', 'RETAIL']).optional(),
+    showCancelled: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  }),
   handler: async ({ user, query }) => {
-    const where = { memberId: memberOnly(user), type: query.type };
-    const [items, total] = await Promise.all([
+    const memberId = memberOnly(user);
+    const where = { memberId, type: query.type, ...(query.showCancelled ? {} : { status: { not: 'CANCELLED' as const } }) };
+    const [items, total, cancelled] = await Promise.all([
       prisma.order.findMany({ where, orderBy: { createdAt: 'desc' }, skip: (query.page - 1) * query.pageSize, take: query.pageSize, include: { returns: true, _count: { select: { items: true } } } }),
       prisma.order.count({ where }),
+      prisma.order.count({ where: { memberId, type: query.type, status: 'CANCELLED' } }),
     ]);
-    return { items, total, page: query.page, pageSize: query.pageSize };
+    return { items, total, page: query.page, pageSize: query.pageSize, cancelledCount: cancelled };
   },
+});
+
+m.post('/:id/cancel', {
+  summary: 'Cancel my unpaid order (paid orders go through a return)',
+  body: z.object({ reason: z.string().trim().max(300).optional() }),
+  handler: async ({ user, params, body, req }) =>
+    cancelOrder(params.id, req, { memberId: memberOnly(user), by: 'MEMBER', reason: body.reason || 'Cancelled by distributor' }),
+});
+
+m.delete('/:id', {
+  summary: 'Remove my CANCELLED order from my order list (only if it was never paid)',
+  handler: async ({ user, params, req }) =>
+    deleteOrder(params.id, req, { memberId: memberOnly(user), by: 'MEMBER', reason: 'Removed by distributor' }),
 });
 
 m.get('/:id', {

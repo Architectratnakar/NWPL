@@ -126,8 +126,11 @@ export async function markOrderPaid(orderId: string, gateway = 'DEMO', gatewayRe
     if (!order) throw notFound('Order');
     if (order.status !== 'PENDING_PAYMENT') return null;
 
+    // claim the order atomically: a cancel at the same moment can never be overwritten by a payment
+    const claimed = await tx.order.updateMany({ where: { id: orderId, status: 'PENDING_PAYMENT' }, data: { status: 'INVOICED', paidAt: new Date() } });
+    if (claimed.count !== 1) return null;
+    await tx.order.update({ where: { id: orderId }, data: { invoiceNo: await nextInvoiceNo(tx) } });
     await tx.payment.create({ data: { orderId, gateway, gatewayRef: gatewayRef ?? `${gateway}-${orderId}`, amount: order.grandTotal, status: 'SUCCESS' } });
-    await tx.order.update({ where: { id: orderId }, data: { status: 'INVOICED', paidAt: new Date(), invoiceNo: await nextInvoiceNo(tx) } });
 
     const member = await tx.member.findUniqueOrThrow({ where: { id: order.memberId! } });
     let tier = member.packageTier;
