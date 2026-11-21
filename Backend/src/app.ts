@@ -26,6 +26,7 @@ import * as adminCore from './modules/admin/core';
 import * as adminCommerce from './modules/admin/commerce';
 import * as adminMoney from './modules/admin/money';
 import * as adminIncome from './modules/admin/income';
+import { walletAdjust } from './modules/admin/walletAdjust';
 import * as autopool from './modules/autopool';
 import * as franchise from './modules/franchise';
 
@@ -53,7 +54,7 @@ export function createApp() {
     adminCore.dashboard, adminCore.users, adminCore.members, adminCore.kyc, adminCore.auditLog,
     adminCommerce.products, adminCommerce.packages, adminCommerce.ranks, adminCommerce.orders, adminCommerce.returns,
     adminMoney.closings, adminMoney.withdrawals, adminMoney.settings, adminMoney.reports, adminMoney.tickets,
-    adminIncome.income,
+    adminIncome.income, walletAdjust,
     autopool.admin, autopool.member,
     franchise.admin, franchise.panel,
   ];

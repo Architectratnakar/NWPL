@@ -41,6 +41,7 @@ const Settings = lazy(() => import('@/pages/admin/System').then((m) => ({ defaul
 const AdminTickets = lazy(() => import('@/pages/admin/System').then((m) => ({ default: m.AdminTickets })));
 const Audit = lazy(() => import('@/pages/admin/System').then((m) => ({ default: m.Audit })));
 const AdminIncome = lazy(() => import('@/pages/admin/Income'));
+const WalletAdjustments = lazy(() => import('@/pages/admin/WalletAdjustments'));
 const AdminAutopool = lazy(() => import('@/pages/admin/Autopool'));
 const FranchiseList = lazy(() => import('@/pages/admin/Franchises').then((m) => ({ default: m.FranchiseList })));
 const FranchiseDetail = lazy(() => import('@/pages/admin/Franchises').then((m) => ({ default: m.FranchiseDetail })));
@@ -65,6 +66,12 @@ function Guard({ area, children }: { area: 'member' | 'admin' | 'franchise'; chi
 function SuperOnly({ children }: { children: ReactNode }) {
   const { hasRole } = useAuth();
   return hasRole('ADMIN_SUPER') ? <>{children}</> : <Navigate to="/admin" replace />;
+}
+
+/** Super Admin + Finance admin only */
+function FinanceOnly({ children }: { children: ReactNode }) {
+  const { hasRole } = useAuth();
+  return hasRole('ADMIN_SUPER', 'ADMIN_FINANCE') ? <>{children}</> : <Navigate to="/admin" replace />;
 }
 
 function Home() {
@@ -126,6 +133,7 @@ export default function App() {
         <Route path="franchises" element={<S><FranchiseList /></S>} />
         <Route path="franchises/:id" element={<S><FranchiseDetail /></S>} />
         <Route path="withdrawals" element={<S><Withdrawals /></S>} />
+        <Route path="wallet-adjustments" element={<FinanceOnly><S><WalletAdjustments /></S></FinanceOnly>} />
         <Route path="ranks" element={<S><RanksAdmin /></S>} />
         <Route path="reports" element={<S><Reports /></S>} />
         <Route path="settings" element={<S><Settings /></S>} />

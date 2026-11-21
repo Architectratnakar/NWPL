@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { ArrowDownToLine, Landmark, Wallet as WalletIcon } from 'lucide-react';
-import { get, post } from '@/api/client';
+import { ArrowDownToLine, FileText, Landmark, Wallet as WalletIcon } from 'lucide-react';
+import { get, openAuthed, post } from '@/api/client';
 import { Badge, Button, Callout, Card, DataTable, Field, Input, Modal, PageHeader, Pagination, StatCard, Tabs } from '@/components/ui';
 import { dateTime, inr, num, titleCase } from '@/lib/format';
 import { useAction } from '@/lib/hooks';
@@ -41,7 +41,11 @@ export default function Wallet() {
             <DataTable loading={isLoading} rows={w?.items} columns={[
               { key: 'createdAt', header: 'Date', render: (r: any) => dateTime(r.createdAt) },
               { key: 'type', header: 'Entry', render: (r: any) => <Badge status={r.type} /> },
-              { key: 'what', header: 'Details', render: (r: any) => <div><p className="font-semibold">{r.incomeType ? titleCase(r.incomeType) : titleCase(r.refType)}</p><p className="text-xs text-slate-500">{r.note}</p></div> },
+              { key: 'what', header: 'Details', render: (r: any) => r.label ? (
+                // admin wallet adjustment: "Admin credit" / "Admin debit" with the reason and its credit / debit note
+                <div><p className="font-semibold">{r.label}</p><p className="text-xs text-slate-600">{r.reason}</p>
+                  {r.noteNo && <button type="button" onClick={() => openAuthed(`/finance/wallet-adjustments/${r.adjustmentId}/note`)} className="mt-0.5 inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:underline"><FileText className="h-3.5 w-3.5" />{r.type === 'CREDIT' ? 'Credit note' : 'Debit note'} {r.noteNo}</button>}</div>
+              ) : <div><p className="font-semibold">{r.incomeType ? titleCase(r.incomeType) : titleCase(r.refType)}</p><p className="text-xs text-slate-500">{r.note}</p></div> },
               { key: 'amount', header: 'Amount', align: 'right', render: (r: any) => <b className={r.type === 'CREDIT' ? 'text-brand-700' : ''}>{r.type === 'CREDIT' ? '+' : '−'}{inr(r.amount, 2)}</b> },
               { key: 'balanceAfter', header: 'Balance', align: 'right', render: (r: any) => inr(r.balanceAfter, 2) },
             ]} />

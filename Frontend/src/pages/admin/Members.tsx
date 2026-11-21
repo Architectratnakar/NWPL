@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { AlertTriangle, ArrowLeft, Eye, GitFork, IndianRupee, KeyRound, Pencil, Search, ShieldAlert, Trash2, Users } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Eye, GitFork, IndianRupee, KeyRound, Pencil, Search, ShieldAlert, Trash2, Users, WalletCards } from 'lucide-react';
 import { del, get, openAuthed, patch } from '@/api/client';
 import { useAuth } from '@/auth/AuthContext';
 import { Avatar, Badge, Button, Card, DataTable, Field, Input, KeyValue, Modal, PageHeader, PageLoader, Pagination, Select, StatCard, Textarea } from '@/components/ui';
 import { bv, date, dateTime, inr, titleCase } from '@/lib/format';
 import { useAction } from '@/lib/hooks';
 import ResetPasswordModal, { type ResetTarget } from '@/components/ResetPasswordModal';
+import { AdjustmentTable, AdjustWalletModal, fetchAdjustments } from '@/components/WalletAdjust';
 
 export function MembersList() {
   const nav = useNavigate();
@@ -64,10 +65,13 @@ export function MemberDetail() {
   const [edit, setEdit] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
   const [delOpen, setDelOpen] = useState(false);
+  const [adjOpen, setAdjOpen] = useState(false);
   const [form, setForm] = useState<any>({});
   const { busy, run } = useAction();
   const isSuper = hasRole('ADMIN_SUPER');
   const canEdit = hasRole('ADMIN_SUPER', 'ADMIN_OPS');
+  const isFinance = hasRole('ADMIN_SUPER', 'ADMIN_FINANCE');
+  const { data: adj } = useQuery({ queryKey: ['wallet-adjustments', 'member', id], queryFn: () => fetchAdjustments({ memberId: id, pageSize: 10 }), enabled: isFinance });
 
   const openEdit = () => {
     if (!m) return;
@@ -135,6 +139,7 @@ export function MemberDetail() {
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" icon={<GitFork className="h-4 w-4" />} onClick={() => nav(`/admin/genealogy?code=${m.distributorCode}`)}>Tree</Button>
           {canEdit && <Button variant="outline" icon={<ShieldAlert className="h-4 w-4" />} onClick={openEdit}>{isSuper ? 'Edit full profile' : 'Edit / status'}</Button>}
+          {isFinance && <Button variant="outline" icon={<WalletCards className="h-4 w-4" />} onClick={() => setAdjOpen(true)}>Adjust wallet</Button>}
           {hasRole('ADMIN_SUPER') && <Button variant="outline" icon={<IndianRupee className="h-4 w-4" />} onClick={() => nav(`/admin/income?member=${m.id}`)}>Income</Button>}
           {isSuper && <Button variant="outline" icon={<KeyRound className="h-4 w-4" />} onClick={() => setPwOpen(true)}>Reset password</Button>}
           {isSuper && <Button variant="outline" className="!border-red-200 !text-red-600 hover:!bg-red-50" icon={<Trash2 className="h-4 w-4" />} onClick={() => setDelOpen(true)}>Delete</Button>}
@@ -143,9 +148,14 @@ export function MemberDetail() {
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Left BV / IDs" value={bv(m.volume?.totalLeftBv)} sub={`${m.volume?.totalLeftCount} IDs · carry ${m.volume?.carryLeftFull + m.volume?.carryLeftBasic}`} />
         <StatCard label="Right BV / IDs" value={bv(m.volume?.totalRightBv)} sub={`${m.volume?.totalRightCount} IDs · carry ${m.volume?.carryRightFull + m.volume?.carryRightBasic}`} tone="plum" />
-        <StatCard label="Wallet" value={inr(m.wallet?.balance, 2)} tone="gold" />
+        <StatCard label="Wallet" value={inr(m.wallet?.balance, 2)} tone="gold" sub={adj?.counts?.PENDING ? `${adj.counts.PENDING} adjustment(s) waiting for approval` : undefined} />
         <StatCard label="Direct sponsors" value={m.directs} tone="blue" />
       </div>
+      {isFinance && (adj?.items?.length ?? 0) > 0 && (
+        <Card title="Wallet adjustments" noPad className="mb-6" actions={<Button size="sm" variant="ghost" onClick={() => nav("/admin/wallet-adjustments")}>All adjustments</Button>}>
+          <AdjustmentTable rows={adj.items} canApproveOwn={!!adj.canApproveOwn} showMember={false} />
+        </Card>
+      )}
       <div className="grid gap-6 xl:grid-cols-2">
         <Card title="Profile">
           <KeyValue items={[
@@ -215,6 +225,7 @@ export function MemberDetail() {
           <div className="sm:col-span-2"><Field label="Reason / note (optional, saved in the audit log)"><Textarea value={form.reason ?? ''} onChange={(e) => setForm({ ...form, reason: e.target.value })} /></Field></div>
         </div>
       </Modal>
+      {isFinance && <AdjustWalletModal open={adjOpen} onClose={() => setAdjOpen(false)} member={m} />}
       {isSuper && <DeleteMemberModal open={delOpen} member={m} onClose={() => setDelOpen(false)}
         onTerminate={() => { setDelOpen(false); openEdit(); setForm((f: any) => ({ ...f, status: 'TERMINATED' })); }}
         onDeleted={() => nav('/admin/members', { replace: true })} />}

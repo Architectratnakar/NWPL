@@ -6,6 +6,7 @@ import { badRequest } from '../lib/http';
 import { getSettings } from '../lib/settings';
 import { debitWallet } from '../services/wallet';
 import { audit } from '../lib/audit';
+import { renderAdjustmentNote } from '../services/walletAdjust';
 
 const D = (v: Prisma.Decimal.Value) => new Prisma.Decimal(v);
 const IncomeTypes = z.enum(['PAIR_MATCHING', 'RANK_BONUS', 'SPECIAL_BONUS', 'RETAIL_PROFIT', 'LEADERSHIP', 'ROYALTY', 'LEVEL_REWARD', 'AUTOPOOL', 'ADJUSTMENT']);
@@ -22,7 +23,16 @@ m.get('/income', {
       prisma.closingLine.count({ where }),
       prisma.closingLine.groupBy({ by: ['incomeType'], where: { memberId: memberOnly(user), closing: { status: 'POSTED' } }, _sum: { amount: true, pairs: true } }),
     ]);
-    return { items, total, page: query.page, pageSize: query.pageSize, summary: sums.map((s) => ({ type: s.incomeType, amount: s._sum.amount, pairs: s._sum.pairs })) };
+    const summary = sums.map((s) => ({ type: s.incomeType as string, amount: s._sum.amount as Prisma.Decimal | null, pairs: s._sum.pairs }));
+    // approved admin wallet adjustments count as ADJUSTMENT income (credits minus debits)
+    const adj = await prisma.walletTxn.groupBy({ by: ['type'], where: { memberId: memberOnly(user), refType: 'ADJUSTMENT' }, _sum: { amount: true } });
+    if (adj.length && (!query.type || query.type === 'ADJUSTMENT')) {
+      const net = adj.reduce((a, t) => (t.type === 'CREDIT' ? a.add(t._sum.amount ?? 0) : a.sub(t._sum.amount ?? 0)), D(0));
+      const i = summary.findIndex((s) => s.type === 'ADJUSTMENT');
+      if (i >= 0) summary[i] = { ...summary[i], amount: D(summary[i].amount ?? 0).add(net) };
+      else summary.push({ type: 'ADJUSTMENT', amount: net, pairs: null });
+    }
+    return { items, total, page: query.page, pageSize: query.pageSize, summary };
   },
 });
 
@@ -39,8 +49,16 @@ m.get('/wallet', {
       getSettings(),
       prisma.member.findUniqueOrThrow({ where: { id: memberId }, select: { kycStatus: true, bank: { select: { accountLast4: true, ifsc: true, verified: true } } } }),
     ]);
+    // admin credits / debits: show them as "Admin credit" / "Admin debit" with the reason and the credit / debit note number
+    const adjIds = items.filter((t) => t.refType === 'ADJUSTMENT').map((t) => t.refId);
+    const adj = adjIds.length ? await prisma.pendingAction.findMany({ where: { id: { in: adjIds } }, select: { id: true, payload: true } }) : [];
+    const rows = items.map((t) => {
+      if (t.refType !== 'ADJUSTMENT') return t;
+      const pl = (adj.find((a) => a.id === t.refId)?.payload ?? {}) as { reason?: string; noteNo?: string };
+      return { ...t, label: t.type === 'CREDIT' ? 'Admin credit' : 'Admin debit', reason: pl.reason ?? null, noteNo: pl.noteNo ?? null, adjustmentId: t.refId };
+    });
     return {
-      wallet, items, total, page: query.page, pageSize: query.pageSize,
+      wallet, items: rows, total, page: query.page, pageSize: query.pageSize,
       rules: { minAmount: s.values.withdrawal.minAmount, tdsPercent: s.values.deductions.tdsPercent ?? 0, adminChargePercent: s.values.deductions.adminChargePercent, allowedDays: s.values.withdrawal.enforceDays ? s.values.withdrawal.allowedDays : null },
       kycStatus: member.kycStatus, bank: member.bank,
     };
@@ -73,6 +91,14 @@ m.post('/withdrawals', {
     });
     await audit(req, 'WITHDRAWAL.REQUEST', 'Withdrawal', w.id, undefined, { gross, net });
     return w;
+  },
+});
+
+m.get('/wallet-adjustments/:id/note', {
+  summary: 'My Credit Note / Debit Note for an admin wallet adjustment (HTML)',
+  raw: true,
+  handler: async ({ user, params, res }) => {
+    res.type('html').send(await renderAdjustmentNote(params.id, memberOnly(user)));
   },
 });
 

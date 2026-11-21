@@ -46,12 +46,21 @@ income.get('/', {
       : Prisma.empty;
     const order =
       query.sort === 'recent' ? Prisma.sql`inc.last_at DESC, inc.total DESC` : query.sort === 'name' ? Prisma.sql`m."fullName" ASC` : Prisma.sql`inc.total DESC, m."distributorCode" ASC`;
+    // income = posted closing lines + approved admin wallet adjustments (credit +, debit −) as ADJUSTMENT
+    const srcSql = Prisma.sql`
+      SELECT l."memberId", l."incomeType"::text AS "incomeType", l."amount", l."pairs", l."flushed", c."periodStart" AS at
+      FROM "ClosingLine" l JOIN "Closing" c ON c."id" = l."closingId"
+      WHERE c."status" = 'POSTED' AND c."periodStart" >= ${start} AND c."periodStart" < ${end}
+      UNION ALL
+      SELECT t."memberId", 'ADJUSTMENT', CASE WHEN t."type" = 'CREDIT' THEN t."amount" ELSE -t."amount" END, 0, 0, t."createdAt"
+      FROM "WalletTxn" t
+      WHERE t."refType" = 'ADJUSTMENT' AND t."createdAt" >= ${start} AND t."createdAt" < ${end}`;
     const csv = query.format === 'csv';
     const limit = csv ? 100_000 : query.pageSize;
     const offset = csv ? 0 : (query.page - 1) * query.pageSize;
 
     const rows = await prisma.$queryRaw<Record<string, unknown>[]>`
-      WITH inc AS (
+      WITH src AS (${srcSql}), inc AS (
         SELECT l."memberId",
           SUM(l."amount") AS total,
           SUM(l."amount") FILTER (WHERE l."incomeType" = 'PAIR_MATCHING') AS pair_income,
@@ -60,11 +69,10 @@ income.get('/', {
           SUM(l."amount") FILTER (WHERE l."incomeType" = 'RANK_BONUS') AS rank_bonus,
           SUM(l."amount") FILTER (WHERE l."incomeType" = 'SPECIAL_BONUS') AS special_bonus,
           SUM(l."amount") FILTER (WHERE l."incomeType" NOT IN ('PAIR_MATCHING', 'RANK_BONUS', 'SPECIAL_BONUS')) AS other_income,
-          MAX(c."periodStart") AS last_at,
+          MAX(l.at) AS last_at,
           COUNT(*) AS lines
-        FROM "ClosingLine" l
-        JOIN "Closing" c ON c."id" = l."closingId"
-        WHERE c."status" = 'POSTED' AND c."periodStart" >= ${start} AND c."periodStart" < ${end} ${typeSql}
+        FROM src l
+        WHERE TRUE ${typeSql}
         GROUP BY l."memberId"
       )
       SELECT m."id", m."distributorCode" AS code, m."fullName" AS name, u."mobile", m."packageTier"::text AS tier,
@@ -124,16 +132,18 @@ income.get('/', {
 
     // Totals for the cards — same period, type AND search filter as the table
     const byType = await prisma.$queryRaw<{ type: string; amount: Prisma.Decimal; lines: bigint; pairs: bigint | null }[]>`
+      WITH src AS (${srcSql})
       SELECT l."incomeType"::text AS type, SUM(l."amount") AS amount, COUNT(*) AS lines, SUM(l."pairs") AS pairs
-      FROM "ClosingLine" l JOIN "Closing" c ON c."id" = l."closingId"
+      FROM src l
       JOIN "Member" m ON m."id" = l."memberId" JOIN "User" u ON u."id" = m."userId"
-      WHERE c."status" = 'POSTED' AND c."periodStart" >= ${start} AND c."periodStart" < ${end} ${typeSql} ${searchSql}
+      WHERE TRUE ${typeSql} ${searchSql}
       GROUP BY 1 ORDER BY 2 DESC`;
     const [earners, active, wallets, paidOut] = await Promise.all([
       prisma.$queryRaw<{ n: bigint }[]>`
-        SELECT COUNT(DISTINCT l."memberId") AS n FROM "ClosingLine" l JOIN "Closing" c ON c."id" = l."closingId"
+        WITH src AS (${srcSql})
+        SELECT COUNT(DISTINCT l."memberId") AS n FROM src l
         JOIN "Member" m ON m."id" = l."memberId" JOIN "User" u ON u."id" = m."userId"
-        WHERE c."status" = 'POSTED' AND l."amount" > 0 AND c."periodStart" >= ${start} AND c."periodStart" < ${end} ${typeSql} ${searchSql}`,
+        WHERE l."amount" > 0 ${typeSql} ${searchSql}`,
       prisma.$queryRaw<{ n: bigint }[]>`
         SELECT COUNT(*) AS n FROM "Member" m JOIN "User" u ON u."id" = m."userId" WHERE m."status" = 'ACTIVE' ${searchSql}`,
       prisma.$queryRaw<{ s: Prisma.Decimal | null }[]>`
@@ -198,6 +208,17 @@ income.get('/:memberId', {
       prisma.closingLine.groupBy({ by: ['incomeType'], where, _sum: { amount: true, pairs: true, flushed: true }, _count: true }),
       prisma.withdrawal.findMany({ where: { memberId: member.id }, orderBy: { createdAt: 'desc' }, take: 20 }),
     ]);
+    // approved admin wallet adjustments in the same period count as ADJUSTMENT income (credit +, debit −)
+    const adjTxns = !query.type || query.type === 'ADJUSTMENT'
+      ? await prisma.walletTxn.findMany({ where: { memberId: member.id, refType: 'ADJUSTMENT', createdAt: { gte: start, lt: end } }, orderBy: { createdAt: 'desc' } })
+      : [];
+    const adjNet = adjTxns.reduce((a, t) => a + (t.type === 'CREDIT' ? 1 : -1) * num(t.amount), 0);
+    const types = byType.map((t) => ({ type: t.incomeType as string, amount: num(t._sum.amount), pairs: num(t._sum.pairs), flushed: num(t._sum.flushed), lines: t._count }));
+    if (adjTxns.length) {
+      const i = types.findIndex((t) => t.type === 'ADJUSTMENT');
+      if (i >= 0) types[i] = { ...types[i], amount: types[i].amount + adjNet, lines: types[i].lines + adjTxns.length };
+      else types.push({ type: 'ADJUSTMENT', amount: adjNet, pairs: 0, flushed: 0, lines: adjTxns.length });
+    }
     return {
       member: {
         id: member.id, code: member.distributorCode, name: member.fullName, mobile: member.user.mobile, email: member.user.email,
@@ -206,12 +227,13 @@ income.get('/:memberId', {
         walletBalance: num(member.wallet?.balance), walletOnHold: member.wallet?.onHold ?? false, volume: member.volume,
       },
       summary: {
-        totalIncome: byType.reduce((a, t) => a + num(t._sum.amount), 0),
-        byType: byType.map((t) => ({ type: t.incomeType, amount: num(t._sum.amount), pairs: num(t._sum.pairs), flushed: num(t._sum.flushed), lines: t._count })),
+        totalIncome: types.reduce((a, t) => a + t.amount, 0),
+        byType: types,
         withdrawn: withdrawals.filter((w) => w.status !== 'REJECTED').reduce((a, w) => a + num(w.gross), 0),
       },
       lines: { items: lines, total, page: query.page, pageSize: query.pageSize },
       withdrawals,
+      adjustments: adjTxns.map((t) => ({ id: t.id, type: t.type, amount: num(t.amount), note: t.note, at: t.createdAt, requestId: t.refId })),
     };
   },
 });

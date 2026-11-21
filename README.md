@@ -147,6 +147,22 @@ Notes:
 - **Commission** (% per franchise) on the taxable value of every sale; Finance marks it paid with a UTR. Returns put the stock back to the franchise and cancel unpaid commission.
 - Suspend (no new sales) / close / re-activate a franchise. Roles: Super Admin & Operations manage; Finance pays commission.
 
+### Wallet adjustments (Finance → **Wallet Adjustments**)
+
+Credit (add) or debit (take) money in a distributor's wallet by hand, with two people involved, as with closings.
+
+1. **Raise:** on a distributor's page a Super Admin or Finance admin clicks **Adjust wallet** and chooses Credit or Debit. They enter the amount (₹0.01 – ₹5,00,000, at most 2 decimals) and a reason (at least 10 characters). Nothing moves yet.
+2. **Approve or reject:** a *different* admin (Super Admin or Finance) does this under **Wallet Adjustments → Pending**. With the plan setting *makerChecker* switched off, the Super Admin may approve their own request; a Finance admin never can.
+   - **Approve** is one database transaction: the wallet is credited or debited, the request is marked approved, and a numbered **Credit Note** (`CN/2026-27/000001`) or **Debit Note** (`DN/2026-27/000001`) is issued. The same request can never be posted twice.
+   - A debit is refused if the balance is too low.
+   - **Reject** needs a reason and leaves the wallet unchanged.
+- The distributor sees the entry as **Admin credit / Admin debit** with the reason, and can open the note from **Wallet**.
+- A credit is allowed while the wallet is on hold; withdrawals stay blocked. Blocked or terminated distributors cannot get adjustments.
+- TDS and admin charge are still deducted at withdrawal. Income reports show approved adjustments as **ADJUSTMENT** (credits minus debits).
+- Mistakes are corrected with an opposite adjustment. Ledger rows are never edited or deleted.
+- Every request, approval and rejection is in the audit log with the balance before and after. The list downloads as CSV.
+- No database change: it uses the existing `PendingAction`, `WalletTxn` and `Counter` tables.
+
 ### Super Admin login OTP
 - **Off by default** (`SUPER_ADMIN_OTP=false`): the Super Admin signs in with ID + password. With `SUPER_ADMIN_OTP=true`, after the correct password a Super Admin must enter a **6-digit OTP sent by SMS** to `SUPER_ADMIN_OTP_MOBILE` (set to **+917250227201**). 5-minute expiry, 5 wrong tries per OTP, resend after 30 s, max 6 OTPs per 15 min, single use, every step in the audit log.
 - SMS providers: `console` (development), `fast2sms`, `msg91`, `twilio` — see `Backend/.env.example`. Other staff roles and distributors log in as before.
