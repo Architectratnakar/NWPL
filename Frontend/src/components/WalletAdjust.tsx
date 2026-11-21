@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { CheckCheck, FileText, MinusCircle, PlusCircle, XCircle } from 'lucide-react';
 import clsx from 'clsx';
 import { get, openAuthed, post } from '@/api/client';
@@ -14,8 +16,11 @@ export function AdjustWalletModal({ open, onClose, member }: { open: boolean; on
   const [type, setType] = useState<'CREDIT' | 'DEBIT'>('CREDIT');
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('');
+  const [now, setNow] = useState(true);
   const { busy, run } = useAction();
-  useEffect(() => { if (open) { setType('CREDIT'); setAmount(''); setReason(''); } }, [open]);
+  const { data: rules } = useQuery({ queryKey: ['wallet-adjustments', 'rules'], queryFn: () => get('/admin/wallet-adjustments/rules'), enabled: open });
+  useEffect(() => { if (open) { setType('CREDIT'); setAmount(''); setReason(''); setNow(true); } }, [open]);
+  const instant = !!rules?.canApproveOwn && now;
 
   const balance = num(member?.wallet?.balance);
   const amt = Number(amount);
@@ -31,13 +36,16 @@ export function AdjustWalletModal({ open, onClose, member }: { open: boolean; on
   const after = type === 'CREDIT' ? balance + (amt || 0) : balance - (amt || 0);
 
   const submit = () =>
-    run('adj', () => post(`/admin/members/${member.id}/wallet-adjustments`, { type, amount: amt, reason: reason.trim() }), {
-      success: 'Request raised. A second admin must approve it before the wallet changes.', invalidate: KEYS,
-    }).then((r) => r && onClose());
+    run('adj', () => post(`/admin/members/${member.id}/wallet-adjustments`, { type, amount: amt, reason: reason.trim(), approveNow: instant || undefined }), {
+      success: instant
+        ? `${inr(amt, 2)} ${type === 'CREDIT' ? 'credited to' : 'debited from'} ${member.fullName}'s wallet`
+        : 'Request saved as PENDING. The wallet changes only after a second admin approves it (Wallet Adjustments → Pending).',
+      invalidate: [...KEYS, 'admin-member'],
+    }).then((r: any) => { if (r) { onClose(); if (r.status === 'APPROVED') openAuthed(`/admin/wallet-adjustments/${r.id}/note`); } });
 
   return (
     <Modal open={open} onClose={onClose} title={`Adjust wallet — ${member?.distributorCode ?? ''}`}
-      footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button loading={busy === 'adj'} disabled={!ok} onClick={submit}>Raise request</Button></>}>
+      footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button loading={busy === 'adj'} disabled={!ok} onClick={submit}>{instant ? (type === 'CREDIT' ? 'Credit now' : 'Debit now') : 'Raise request for approval'}</Button></>}>
       <div className="space-y-4">
         <div className="flex items-center justify-between rounded-xl bg-slate-50 p-3 text-sm">
           <span>{member?.fullName}<br /><span className="text-xs text-slate-500">Current wallet balance{member?.wallet?.onHold ? ' (on hold)' : ''}</span></span>
@@ -62,6 +70,16 @@ export function AdjustWalletModal({ open, onClose, member }: { open: boolean; on
         {amt > 0 && !amountError && (
           <p className="text-sm text-slate-600">After approval the balance will be <b>{inr(after, 2)}</b>. TDS and admin charges are deducted later, when the distributor withdraws.</p>
         )}
+        {rules && (rules.canApproveOwn ? (
+          <label className="flex items-start gap-2 rounded-xl bg-brand-50 p-3 text-sm text-brand-900">
+            <input type="checkbox" className="mt-0.5 h-4 w-4 accent-brand-700" checked={now} onChange={(e) => setNow(e.target.checked)} />
+            <span><b>{type === 'CREDIT' ? 'Credit' : 'Debit'} now</b> — approve in the same click (maker-checker is off). The wallet changes at once and the {type === 'CREDIT' ? 'Credit' : 'Debit'} Note opens. Untick to leave it for another admin to approve.</span>
+          </label>
+        ) : rules.otherApprovers === 0 ? (
+          <Callout tone="warn">Maker-checker is on, so a <b>second admin</b> must approve this before the wallet changes — but there is no other Super Admin or Finance admin yet. Add a Finance admin under <Link className="link" to="/admin/users" onClick={onClose}>Staff Users</Link>, or switch maker-checker off in <Link className="link" to="/admin/settings" onClick={onClose}>Plan settings</Link> to use “Credit now”.</Callout>
+        ) : (
+          <Callout tone="info">Maker-checker is on: this is saved as <b>Pending</b>. The wallet changes only after a <b>different</b> Super Admin or Finance admin approves it under Wallet Adjustments → Pending.</Callout>
+        ))}
         {member?.wallet?.onHold && type === 'CREDIT' && <p className="text-xs text-amber-700">The wallet is on hold: the credit is allowed, but withdrawals stay blocked until the hold is removed.</p>}
       </div>
     </Modal>
@@ -97,7 +115,7 @@ export function AdjustmentTable({ rows, loading, canApproveOwn, showMember = tru
             {r.status === 'APPROVED' && <Button size="sm" variant="ghost" icon={<FileText className="h-4 w-4" />} onClick={() => openAuthed(`/admin/wallet-adjustments/${r.id}/note`)}>{r.noteNo}</Button>}
             {canDecide(r) && <Button size="sm" variant="secondary" icon={<CheckCheck className="h-4 w-4" />} onClick={() => setApprove(r)}>Approve</Button>}
             {canDecide(r) && <Button size="sm" variant="ghost" icon={<XCircle className="h-4 w-4" />} onClick={() => { setReject(r); setRejectReason(''); }}>Reject</Button>}
-            {r.status === 'PENDING' && !canDecide(r) && <span className="text-xs text-slate-400">Waiting for a 2nd admin</span>}
+            {r.status === 'PENDING' && !canDecide(r) && <span className="max-w-[160px] text-right text-xs text-amber-700" title="You raised this request. Another Super Admin or Finance admin must approve it, or switch maker-checker off in Plan settings (Super Admin can then approve their own).">You raised it — a 2nd admin must approve</span>}
           </div>
         ) },
       ]} />

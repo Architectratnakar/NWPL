@@ -47,7 +47,7 @@ export function Settings() {
               {numIn('deductions.tdsPercent', 'TDS %', 'Confirm the rate with your CA')}{numIn('deductions.adminChargePercent', 'Admin charge %')}
               {numIn('withdrawal.minAmount', 'Minimum withdrawal (₹)')}{numIn('payoutAlertPercent', 'Alert when payout > % of sales')}
               <label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" className="h-4 w-4 accent-brand-700" checked={!!v.withdrawal.enforceDays} onChange={(e) => set('withdrawal.enforceDays', e.target.checked)} /> Allow withdrawals only on: {v.withdrawal.allowedDays.join(', ')}</label>
-              <label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" className="h-4 w-4 accent-brand-700" checked={!!v.makerChecker} onChange={(e) => set('makerChecker', e.target.checked)} /> Maker-checker: closing approver must differ from the person who ran it</label>
+              <label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" className="h-4 w-4 accent-brand-700" checked={!!v.makerChecker} onChange={(e) => set('makerChecker', e.target.checked)} /> Maker-checker: closings and wallet adjustments must be approved by a different admin (off = Super Admin can approve own / “Credit now”)</label>
             </div>
           </Card>
           <Card title="Bonuses & compliance">

@@ -4,6 +4,7 @@ import { prisma } from '../../lib/prisma';
 import { createModule, PageQuery } from '../../lib/openapi';
 import { ROLES } from '../../lib/auth';
 import { getSettings } from '../../lib/settings';
+import { badRequest, forbidden } from '../../lib/http';
 import {
   ADJ_ACTION, MAX_ADJUSTMENT, approveAdjustment, describe, rejectAdjustment, renderAdjustmentNote, requestAdjustment,
 } from '../../services/walletAdjust';
@@ -24,15 +25,42 @@ walletAdjust.post('/members/:id/wallet-adjustments', {
     type: z.enum(['CREDIT', 'DEBIT']),
     amount: Amount.openapi({ description: '₹, more than 0, at most 2 decimals, max 5,00,000' }),
     reason: z.string().trim().min(10, 'Reason must be at least 10 characters').max(300),
+    approveNow: z.boolean().optional().openapi({ description: 'Super Admin only, and only when maker-checker is OFF: approve in the same click ("Credit now")' }),
   }),
   handler: async ({ params, body, user, req }) => {
-    const { request, payload } = await requestAdjustment(params.id, body, user.id, req);
     const { values } = await getSettings();
-    return { id: request.id, status: request.status, ...payload, selfApprove: !values.makerChecker && user.role === 'ADMIN_SUPER' };
+    const selfApprove = !values.makerChecker && user.role === 'ADMIN_SUPER';
+    if (body.approveNow && !selfApprove) {
+      throw forbidden(values.makerChecker
+        ? 'Maker-checker is ON: a second admin (Finance admin or another Super Admin) must approve. Raise the request without "Credit now", or switch maker-checker off in Plan settings.'
+        : 'Only the Super Admin can credit / debit immediately');
+    }
+    const { request, payload } = await requestAdjustment(params.id, body, user.id, req);
+    if (body.approveNow) {
+      // same rules and same single transaction as the Approve button; if it fails the request stays PENDING
+      try {
+        const r = await approveAdjustment(request.id, user, req);
+        return { id: request.id, status: 'APPROVED', ...r.payload, selfApprove };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Approval failed';
+        throw badRequest(`The request was saved as PENDING, but could not be approved: ${msg}`);
+      }
+    }
+    return { id: request.id, status: request.status, ...payload, selfApprove };
   },
 });
 
 const Status = z.enum(['PENDING', 'APPROVED', 'REJECTED']);
+
+walletAdjust.get('/wallet-adjustments/rules', {
+  summary: 'Who can approve wallet adjustments right now (for the "Adjust wallet" popup)',
+  access: ROLES.FINANCE,
+  handler: async ({ user }) => {
+    const { values } = await getSettings();
+    const approvers = await prisma.user.count({ where: { role: { in: ['ADMIN_SUPER', 'ADMIN_FINANCE'] }, isActive: true, NOT: { id: user.id } } });
+    return { makerChecker: values.makerChecker, canApproveOwn: !values.makerChecker && user.role === 'ADMIN_SUPER', otherApprovers: approvers };
+  },
+});
 
 walletAdjust.get('/wallet-adjustments', {
   summary: 'Wallet adjustment requests (paged). Add ?format=csv to download.',

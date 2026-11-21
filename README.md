@@ -156,6 +156,7 @@ Credit (add) or debit (take) money in a distributor's wallet by hand, with two p
    - **Approve** is one database transaction: the wallet is credited or debited, the request is marked approved, and a numbered **Credit Note** (`CN/2026-27/000001`) or **Debit Note** (`DN/2026-27/000001`) is issued. The same request can never be posted twice.
    - A debit is refused if the balance is too low.
    - **Reject** needs a reason and leaves the wallet unchanged.
+- **Only one admin?** With maker-checker **on** (the default), a request stays **Pending** until a *different* Super Admin or Finance admin approves it, and the money is not in the wallet until then. Either add a Finance admin under *Staff Users*, or switch maker-checker **off** in *Plan settings*. With it off, the Super Admin gets **Credit now / Debit now**, which approves in the same click, and can approve requests that are already waiting.
 - The distributor sees the entry as **Admin credit / Admin debit** with the reason, and can open the note from **Wallet**.
 - A credit is allowed while the wallet is on hold; withdrawals stay blocked. Blocked or terminated distributors cannot get adjustments.
 - TDS and admin charge are still deducted at withdrawal. Income reports show approved adjustments as **ADJUSTMENT** (credits minus debits).
